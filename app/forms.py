@@ -27,3 +27,10 @@ class ScrapeConfigForm(FlaskForm):
     pstrax_password = PasswordField('Password', validators=[Optional()])
     scrape_interval = StringField('Scrape Interval (minutes)', validators=[Optional()])
 
+
+class PasswordChangeForm(FlaskForm):
+    """Form for changing user password"""
+    current_password = PasswordField('Current Password', validators=[DataRequired()])
+    new_password = PasswordField('New Password', validators=[DataRequired(), Length(min=6, message='Password must be at least 6 characters long')])
+    confirm_password = PasswordField('Confirm New Password', validators=[DataRequired()])
+

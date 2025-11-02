@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, jsonify, redirect, url_fo
 from flask_login import login_required, current_user
 from app import db
 from app.models import Task, Alert, ScrapeData, ScrapeConfig, User
-from app.forms import TaskForm, AlertForm, ScrapeConfigForm
+from app.forms import TaskForm, AlertForm, ScrapeConfigForm, PasswordChangeForm
 from app.user_forms import UserForm
 from app.admin import admin_required
 from app.socketio_events import emit_task_update, emit_alert_update, emit_scrape_update
@@ -241,6 +241,44 @@ def update_settings():
     
     flash('Error updating settings.', 'error')
     return redirect(url_for('main.settings'))
+
+
+@bp.route('/change-password')
+@login_required
+def change_password():
+    """Page for users to change their password"""
+    form = PasswordChangeForm()
+    return render_template('change_password.html', form=form)
+
+
+@bp.route('/change-password', methods=['POST'])
+@login_required
+def update_password():
+    """Handle password change"""
+    form = PasswordChangeForm()
+    
+    if not form.validate_on_submit():
+        for field, errors in form.errors.items():
+            for error in errors:
+                flash(f'{getattr(form, field).label.text}: {error}', 'error')
+        return render_template('change_password.html', form=form)
+    
+    # Verify current password
+    if not current_user.check_password(form.current_password.data):
+        flash('Current password is incorrect.', 'error')
+        return render_template('change_password.html', form=form)
+    
+    # Check that new password and confirm password match
+    if form.new_password.data != form.confirm_password.data:
+        flash('New password and confirmation do not match.', 'error')
+        return render_template('change_password.html', form=form)
+    
+    # Update password
+    current_user.set_password(form.new_password.data)
+    db.session.commit()
+    
+    flash('Password changed successfully!', 'success')
+    return redirect(url_for('main.change_password'))
 
 
 # API Routes

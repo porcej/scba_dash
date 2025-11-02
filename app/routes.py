@@ -14,6 +14,53 @@ import json
 bp = Blueprint('main', __name__)
 
 
+@bp.route('/health')
+def health():
+    """Health check endpoint"""
+    try:
+        # Check database connectivity by performing a simple query
+        User.query.first()
+        db_status = 'healthy'
+        db_error = None
+    except Exception as e:
+        db_status = 'unhealthy'
+        db_error = str(e)
+    
+    # Get basic application stats
+    try:
+        user_count = User.query.count()
+        task_count = Task.query.count()
+        alert_count = Alert.query.count()
+        scrape_config_exists = ScrapeConfig.query.first() is not None
+        latest_scrape = ScrapeData.query.order_by(ScrapeData.scraped_at.desc()).first()
+        
+        stats = {
+            'users': user_count,
+            'tasks': task_count,
+            'alerts': alert_count,
+            'scrape_config_configured': scrape_config_exists,
+            'latest_scrape': latest_scrape.scraped_at.isoformat() if latest_scrape else None
+        }
+    except Exception as e:
+        stats = {'error': str(e)}
+    
+    # Determine overall health status
+    overall_status = 'healthy' if db_status == 'healthy' else 'unhealthy'
+    
+    response = {
+        'status': overall_status,
+        'timestamp': datetime.utcnow().isoformat(),
+        'database': {
+            'status': db_status,
+            'error': db_error
+        },
+        'stats': stats
+    }
+    
+    status_code = 200 if overall_status == 'healthy' else 503
+    return jsonify(response), status_code
+
+
 @bp.route('/')
 def index():
     """Redirect to dashboard"""

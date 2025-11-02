@@ -22,12 +22,14 @@ def handle_disconnect():
         print(f'User {current_user.username} disconnected')
 
 
-def emit_task_update(task_id=None):
+def emit_task_update(task_id=None, action='updated'):
     """Emit task update event to all clients"""
     if task_id:
         task = Task.query.get(task_id)
         if task:
-            socketio.emit('task_updated', task.to_dict(), namespace='/')
+            data = task.to_dict()
+            data['action'] = action
+            socketio.emit('task_updated', data, namespace='/')
     else:
         socketio.emit('task_updated', {'action': 'refresh'}, namespace='/')
 

@@ -61,9 +61,16 @@ function initSocketIO() {
         // Task updates
         socket.on('task_updated', function(data) {
             console.log('Task updated:', data);
-            // Reload tasks if on tasks page
-            if (window.location.pathname.includes('/tasks')) {
+            // Handle task updates dynamically
+            if (window.handleTaskUpdate) {
+                window.handleTaskUpdate(data);
+            } else if (window.location.pathname.includes('/tasks')) {
                 loadTasks();
+            } else if (window.location.pathname.includes('/dashboard')) {
+                // Refresh dashboard tasks
+                if (window.updateDashboardTasks) {
+                    window.updateDashboardTasks(data);
+                }
             }
         });
 

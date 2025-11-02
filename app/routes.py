@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash
 from flask_login import login_required, current_user
-from app import db
+from app import db, socketio
 from app.models import Task, Alert, ScrapeData, ScrapeConfig, User
 from app.forms import TaskForm, AlertForm, ScrapeConfigForm, PasswordChangeForm
 from app.user_forms import UserForm
@@ -27,8 +27,8 @@ def index():
 @login_required
 def dashboard():
     """Main dashboard view"""
-    # Get recent tasks for current user
-    recent_tasks = Task.query.filter_by(user_id=current_user.id).order_by(Task.created_at.desc()).limit(5).all()
+    # Get recent incomplete tasks for current user
+    recent_tasks = Task.query.filter_by(user_id=current_user.id, completed=False).order_by(Task.created_at.desc()).limit(5).all()
     
     # Get latest scraped data
     latest_scrape = ScrapeData.query.order_by(ScrapeData.scraped_at.desc()).first()
@@ -65,7 +65,7 @@ def create_task():
         )
         db.session.add(task)
         db.session.commit()
-        emit_task_update(task.id)
+        emit_task_update(task.id, action='added')
         flash('Task created successfully!', 'success')
         return redirect(url_for('main.tasks'))
     flash('Error creating task.', 'error')
@@ -103,7 +103,8 @@ def toggle_task(task_id):
     task.completed = not task.completed
     task.updated_at = datetime.utcnow()
     db.session.commit()
-    emit_task_update(task.id)
+    action = 'completed' if task.completed else 'uncompleted'
+    emit_task_update(task.id, action=action)
     return jsonify({'success': True, 'completed': task.completed})
 
 
@@ -113,12 +114,20 @@ def delete_task(task_id):
     """Delete a task"""
     task = Task.query.get_or_404(task_id)
     if task.user_id != current_user.id:
+        if request.headers.get('Content-Type') == 'application/json':
+            return jsonify({'error': 'Unauthorized'}), 403
         flash('Unauthorized.', 'error')
         return redirect(url_for('main.tasks'))
     
+    deleted_task_id = task.id
     db.session.delete(task)
     db.session.commit()
-    emit_task_update()
+    socketio.emit('task_updated', {'id': deleted_task_id, 'action': 'deleted'}, namespace='/')
+    
+    # Return JSON for AJAX requests, redirect for form submissions
+    if request.headers.get('Content-Type') == 'application/json':
+        return jsonify({'success': True, 'id': deleted_task_id})
+    
     flash('Task deleted successfully!', 'success')
     return redirect(url_for('main.tasks'))
 

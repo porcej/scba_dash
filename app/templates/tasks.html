@@ -85,10 +85,60 @@
 
 {% block extra_scripts %}
 <script>
-    // Expose function for SocketIO updates
-    window.loadTasksFunction = function() {
-        location.reload();
-    };
+    function formatTaskDate(dateString) {
+        if (!dateString) return '';
+        const date = new Date(dateString);
+        return date.toLocaleString('en-US', { 
+            year: 'numeric', 
+            month: '2-digit', 
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+
+    function createTaskElement(task) {
+        const taskItem = document.createElement('div');
+        taskItem.className = 'list-group-item d-flex justify-content-between align-items-start';
+        taskItem.setAttribute('data-task-id', task.id);
+        
+        const createdAt = formatTaskDate(task.created_at);
+        const updatedAt = formatTaskDate(task.updated_at);
+        const updatedText = updatedAt !== createdAt ? ` | Updated: ${updatedAt}` : '';
+        
+        taskItem.innerHTML = `
+            <div class="ms-2 me-auto">
+                <div class="form-check">
+                    <input class="form-check-input task-checkbox" 
+                           type="checkbox" 
+                           data-task-id="${task.id}"
+                           ${task.completed ? 'checked' : ''}
+                           onchange="toggleTask(${task.id})">
+                    <label class="form-check-label ${task.completed ? 'text-decoration-line-through text-muted' : ''}">
+                        ${escapeHtml(task.content)}
+                    </label>
+                </div>
+                <small class="text-muted">
+                    Created: ${createdAt}${updatedText}
+                </small>
+            </div>
+            <div class="btn-group" role="group">
+                <button type="button" 
+                        class="btn btn-sm btn-outline-danger" 
+                        onclick="deleteTask(${task.id})">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        `;
+        
+        return taskItem;
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
 
     function toggleTask(taskId) {
         fetchWithCSRF(`/tasks/${taskId}/toggle`, {
@@ -99,10 +149,13 @@
             if (data.success) {
                 const taskItem = document.querySelector(`[data-task-id="${taskId}"]`);
                 const label = taskItem.querySelector('label');
+                const checkbox = taskItem.querySelector('input[type="checkbox"]');
                 if (data.completed) {
                     label.classList.add('text-decoration-line-through', 'text-muted');
+                    checkbox.checked = true;
                 } else {
                     label.classList.remove('text-decoration-line-through', 'text-muted');
+                    checkbox.checked = false;
                 }
             }
         })
@@ -111,13 +164,93 @@
 
     function deleteTask(taskId) {
         if (confirm('Are you sure you want to delete this task?')) {
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = `/tasks/${taskId}/delete`;
-            document.body.appendChild(form);
-            form.submit();
+            fetchWithCSRF(`/tasks/${taskId}/delete`, {
+                method: 'POST'
+            })
+            .then(response => {
+                if (response.ok) {
+                    // Task will be removed via Socket.IO event
+                }
+            })
+            .catch(error => console.error('Error:', error));
         }
     }
+
+    // Real-time task update handler
+    window.handleTaskUpdate = function(data) {
+        const tasksContainer = document.querySelector('.list-group');
+        const tasksHeader = document.querySelector('.card-header h5');
+        
+        if (!tasksContainer) return;
+        
+        if (data.action === 'refresh') {
+            location.reload();
+            return;
+        }
+        
+        if (data.action === 'deleted') {
+            const taskItem = tasksContainer.querySelector(`[data-task-id="${data.id}"]`);
+            if (taskItem) {
+                taskItem.remove();
+                // Update task count
+                const taskCount = tasksContainer.children.length;
+                if (tasksHeader) {
+                    tasksHeader.textContent = `Your Tasks (${taskCount})`;
+                }
+                // Show empty message if no tasks
+                if (taskCount === 0) {
+                    tasksContainer.innerHTML = '<p class="text-muted m-3">No tasks yet. Create your first task above!</p>';
+                }
+            }
+            return;
+        }
+        
+        if (data.action === 'added') {
+            // Add new task to the top of the list
+            const taskElement = createTaskElement(data);
+            if (tasksContainer.querySelector('.text-muted')) {
+                tasksContainer.innerHTML = '';
+            }
+            tasksContainer.insertBefore(taskElement, tasksContainer.firstChild);
+            // Update task count
+            const taskCount = tasksContainer.children.length;
+            if (tasksHeader) {
+                tasksHeader.textContent = `Your Tasks (${taskCount})`;
+            }
+            return;
+        }
+        
+        if (data.action === 'completed' || data.action === 'uncompleted') {
+            const taskItem = tasksContainer.querySelector(`[data-task-id="${data.id}"]`);
+            if (taskItem) {
+                const label = taskItem.querySelector('label');
+                const checkbox = taskItem.querySelector('input[type="checkbox"]');
+                if (data.completed) {
+                    label.classList.add('text-decoration-line-through', 'text-muted');
+                    checkbox.checked = true;
+                } else {
+                    label.classList.remove('text-decoration-line-through', 'text-muted');
+                    checkbox.checked = false;
+                }
+            }
+            return;
+        }
+        
+        if (data.action === 'updated') {
+            const taskItem = tasksContainer.querySelector(`[data-task-id="${data.id}"]`);
+            if (taskItem) {
+                // Replace with updated task
+                const newTaskElement = createTaskElement(data);
+                taskItem.replaceWith(newTaskElement);
+            }
+            return;
+        }
+    };
+
+    // Expose function for SocketIO updates (legacy support)
+    window.loadTasksFunction = function() {
+        location.reload();
+    };
 </script>
 {% endblock %}
 

@@ -53,14 +53,17 @@
                     <table class="table table-striped table-hover table-sm" id="gear-list-table">
                         <thead>
                             <tr>
-                                <th>Gear ID</th>
-                                <th>Internal ID</th>
-                                <th>Gear Type</th>
+                                <th>Type / Model</th>
+                                <th>ID</th>
+                                <th>Description</th>
+                                <th>Location</th>
+                                <th>Next Due</th>
+                                <th>Next DO</th>
                             </tr>
                         </thead>
                         <tbody id="gear-list-table-body">
                             <tr>
-                                <td colspan="3" class="text-center text-muted">Loading gear list...</td>
+                                <td colspan="6" class="text-center text-muted">Loading gear list...</td>
                             </tr>
                         </tbody>
                     </table>
@@ -312,6 +315,36 @@
     };
     
     // Gear List Functions
+    function formatDate(dateDisplay) {
+        if (!dateDisplay || dateDisplay === '') return 'N/A';
+        return escapeHtml(dateDisplay);
+    }
+    
+    function parseLocation(locationObj) {
+        if (!locationObj || !locationObj.display) return 'N/A';
+        // Format: "10/28/2025 | EMS 201-EMS 201-MMR "
+        // Extract everything after the "|" and trim
+        const parts = locationObj.display.split('|');
+        if (parts.length > 1) {
+            return parts[1].trim();
+        }
+        return locationObj.display.trim();
+    }
+    
+    function getSortValue(item, fieldPath) {
+        // Handle nested objects like nextdue.nxtsort
+        const parts = fieldPath.split('.');
+        let value = item;
+        for (let part of parts) {
+            if (value && typeof value === 'object') {
+                value = value[part];
+            } else {
+                return '';
+            }
+        }
+        return value || '';
+    }
+    
     function renderGearListTable(gearData) {
         const tbody = document.getElementById('gear-list-table-body');
         if (!tbody) return;
@@ -328,18 +361,112 @@
         }
         
         if (!gearArray || gearArray.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">No gear found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No gear found</td></tr>';
             return;
         }
+        
+        // Sort by "next due" date in ascending order (earliest dates first)
+        gearArray.sort(function(a, b) {
+            const aSort = getSortValue(a, 'nextdue.nxtsort') || '';
+            const bSort = getSortValue(b, 'nextdue.nxtsort') || '';
+            
+            // Empty values go to the end
+            if (!aSort && !bSort) return 0;
+            if (!aSort) return 1;
+            if (!bSort) return -1;
+            
+            // Parse dates for proper comparison
+            // nxtsort format is MM/DD/YYYY
+            function parseDate(dateStr) {
+                if (!dateStr) return null;
+                const parts = dateStr.split('/');
+                if (parts.length === 3) {
+                    // MM/DD/YYYY format
+                    const month = parseInt(parts[0], 10) - 1; // JavaScript months are 0-indexed
+                    const day = parseInt(parts[1], 10);
+                    const year = parseInt(parts[2], 10);
+                    return new Date(year, month, day);
+                }
+                // Fallback: try standard Date parsing
+                const date = new Date(dateStr);
+                return isNaN(date.getTime()) ? null : date;
+            }
+            
+            const aDate = parseDate(aSort);
+            const bDate = parseDate(bSort);
+            
+            // If both dates are valid, compare them
+            if (aDate && bDate) {
+                return aDate.getTime() - bDate.getTime(); // Ascending order (earliest first)
+            }
+            
+            // If one date is invalid, put it at the end
+            if (!aDate && !bDate) return 0;
+            if (!aDate) return 1;
+            if (!bDate) return -1;
+            
+            // Fallback to string comparison if date parsing fails
+            return aSort.localeCompare(bSort);
+        });
         
         // Render each gear item as a table row
         gearArray.forEach(function(gear) {
             const row = document.createElement('tr');
             
+            // Extract values directly from the gear object structure
+            const type = gear.geartype || '';
+            const model = gear.model || '';
+            const serialNumber = gear.serial || '';
+            const id = gear.internalid || '';
+            const description = gear.description || 'N/A';
+            const location = parseLocation(gear.lastloglocation);
+            const nextHydro = gear.nexthydro ? (gear.nexthydro.display || '') : '';
+            const nextFlow = gear.nextflow ? (gear.nextflow.display || '') : '';
+            const nextDo = gear.nextdue ? (gear.nextdue.display || 'N/A') : 'N/A';
+            
+            // Format type and model with line break and muted model text
+            let typeModelHtml = '';
+            if (type && model) {
+                typeModelHtml = `${escapeHtml(type)}<br><span class="text-muted" style="font-size: 0.9em;">${escapeHtml(model)}</span>`;
+            } else if (type) {
+                typeModelHtml = escapeHtml(type);
+            } else if (model) {
+                typeModelHtml = `<span class="text-muted" style="font-size: 0.9em;">${escapeHtml(model)}</span>`;
+            } else {
+                typeModelHtml = 'N/A';
+            }
+            
+            // Format ID and Serial Number with line break and muted serial text
+            let idSerialHtml = '';
+            if (id && serialNumber) {
+                idSerialHtml = `<strong>${escapeHtml(id)}</strong><br><span class="text-muted" style="font-size: 0.9em;">${escapeHtml(serialNumber)}</span>`;
+            } else if (id) {
+                idSerialHtml = `<strong>${escapeHtml(id)}</strong>`;
+            } else if (serialNumber) {
+                idSerialHtml = `<span class="text-muted" style="font-size: 0.9em;">${escapeHtml(serialNumber)}</span>`;
+            } else {
+                idSerialHtml = '';
+            }
+            
+            // Format Next Due (Hydro and Flow) with line break if both exist
+            let nextDueHtml = '';
+            if (nextHydro && nextFlow) {
+                nextDueHtml = `Hysro: ${formatDate(nextHydro)}<br>Flow: ${formatDate(nextFlow)}`;
+            } else if (nextHydro) {
+                nextDueHtml = `Hydro: ${formatDate(nextHydro)}`;
+            } else if (nextFlow) {
+                nextDueHtml = `Flow: ${formatDate(nextFlow)}`;
+            } else {
+                nextDueHtml = '';
+            }
+            
             row.innerHTML = `
-                <td><strong>${escapeHtml(gear.gearid || 'N/A')}</strong></td>
-                <td>${escapeHtml(gear.internalid || 'N/A')}</td>
-                <td>${escapeHtml(gear.geartype || 'N/A')}</td>
+                <td>${typeModelHtml}</td>
+                <td>${idSerialHtml}</td>
+                <td>${escapeHtml(description)}</td>
+                <td>${escapeHtml(location)}</td>
+                <td>${nextDueHtml}</td>
+                <td>${formatDate(nextDo)}</td>
             `;
             
             tbody.appendChild(row);
@@ -353,7 +480,7 @@
                 if (data.error) {
                     const tbody = document.getElementById('gear-list-table-body');
                     if (tbody) {
-                        tbody.innerHTML = `<tr><td colspan="3" class="text-center text-danger">Error: ${escapeHtml(data.error)}</td></tr>`;
+                        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">Error: ${escapeHtml(data.error)}</td></tr>`;
                     }
                 } else if (data.data) {
                     renderGearListTable(data.data);
@@ -363,7 +490,7 @@
                 console.error('Error fetching gear list:', error);
                 const tbody = document.getElementById('gear-list-table-body');
                 if (tbody) {
-                    tbody.innerHTML = `<tr><td colspan="3" class="text-center text-danger">Error loading gear list</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">Error loading gear list</td></tr>`;
                 }
             });
     }

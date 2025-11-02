@@ -420,9 +420,9 @@
             const id = gear.internalid || '';
             const description = gear.description || 'N/A';
             const location = parseLocation(gear.lastloglocation);
-            const nextHydro = gear.nexthydro ? (gear.nexthydro.display || '') : '';
-            const nextFlow = gear.nextflow ? (gear.nextflow.display || '') : '';
-            const nextDo = gear.nextdue ? (gear.nextdue.display || 'N/A') : 'N/A';
+            const nextHydro = gear.nexthydro ? (gear.nexthydro.hydrosort || '') : '';
+            const nextFlow = gear.nextflow ? (gear.nextflow.flowsort || '') : '';
+            const nextDo = gear.nextdue ? (gear.nextdue.display || '') : '';
             
             // Format type and model with line break and muted model text
             let typeModelHtml = '';

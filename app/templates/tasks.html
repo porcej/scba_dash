@@ -7,6 +7,7 @@
     <div class="col-12">
         <h2><i class="bi bi-list-check"></i> Task List</h2>
         
+        {% if current_user.is_admin %}
         <div class="card mb-4">
             <div class="card-header">
                 <h5 class="mb-0">Add New Task</h5>
@@ -35,10 +36,11 @@
                 </form>
             </div>
         </div>
+        {% endif %}
 
         <div class="card">
             <div class="card-header">
-                <h5 class="mb-0">Your Tasks ({{ tasks|length }})</h5>
+                <h5 class="mb-0">Tasks ({{ tasks|length }})</h5>
             </div>
             <div class="card-body">
                 {% if tasks %}
@@ -64,6 +66,7 @@
                                 {% endif %}
                             </small>
                         </div>
+                        {% if current_user.is_admin %}
                         <div class="btn-group" role="group">
                             <button type="button" 
                                     class="btn btn-sm btn-outline-danger" 
@@ -71,11 +74,18 @@
                                 <i class="bi bi-trash"></i>
                             </button>
                         </div>
+                        {% endif %}
                     </div>
                     {% endfor %}
                 </div>
                 {% else %}
-                <p class="text-muted">No tasks yet. Create your first task above!</p>
+                <p class="text-muted">
+                    {% if current_user.is_admin %}
+                        No tasks yet. Create your first task above!
+                    {% else %}
+                        No tasks yet.
+                    {% endif %}
+                </p>
                 {% endif %}
             </div>
         </div>
@@ -195,7 +205,7 @@
                 // Update task count
                 const taskCount = tasksContainer.children.length;
                 if (tasksHeader) {
-                    tasksHeader.textContent = `Your Tasks (${taskCount})`;
+                    tasksHeader.textContent = `Tasks (${taskCount})`;
                 }
                 // Show empty message if no tasks
                 if (taskCount === 0) {

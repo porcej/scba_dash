@@ -27,8 +27,8 @@ def index():
 @login_required
 def dashboard():
     """Main dashboard view"""
-    # Get recent incomplete tasks for current user
-    recent_tasks = Task.query.filter_by(user_id=current_user.id, completed=False).order_by(Task.created_at.desc()).limit(5).all()
+    # Get recent incomplete tasks (all users, since only admins can create tasks)
+    recent_tasks = Task.query.filter_by(completed=False).order_by(Task.created_at.desc()).limit(5).all()
     
     # Get latest scraped data
     latest_scrape = ScrapeData.query.order_by(ScrapeData.scraped_at.desc()).first()
@@ -47,13 +47,15 @@ def dashboard():
 @login_required
 def tasks():
     """Task list management page"""
-    user_tasks = Task.query.filter_by(user_id=current_user.id).order_by(Task.created_at.desc()).all()
+    # Show all tasks to all users (since only admins can create tasks)
+    all_tasks = Task.query.order_by(Task.created_at.desc()).all()
     form = TaskForm()
-    return render_template('tasks.html', tasks=user_tasks, form=form)
+    return render_template('tasks.html', tasks=all_tasks, form=form)
 
 
 @bp.route('/tasks/create', methods=['POST'])
 @login_required
+@admin_required
 def create_task():
     """Create a new task"""
     form = TaskForm()
@@ -74,12 +76,10 @@ def create_task():
 
 @bp.route('/tasks/<int:task_id>/update', methods=['POST'])
 @login_required
+@admin_required
 def update_task(task_id):
-    """Update an existing task"""
+    """Update an existing task - admin only"""
     task = Task.query.get_or_404(task_id)
-    if task.user_id != current_user.id:
-        flash('Unauthorized.', 'error')
-        return redirect(url_for('main.tasks'))
     
     form = TaskForm()
     if form.validate_on_submit():
@@ -95,10 +95,8 @@ def update_task(task_id):
 @bp.route('/tasks/<int:task_id>/toggle', methods=['POST'])
 @login_required
 def toggle_task(task_id):
-    """Toggle task completion status"""
+    """Toggle task completion status - any user can toggle any task"""
     task = Task.query.get_or_404(task_id)
-    if task.user_id != current_user.id:
-        return jsonify({'error': 'Unauthorized'}), 403
     
     task.completed = not task.completed
     task.updated_at = datetime.utcnow()
@@ -110,14 +108,10 @@ def toggle_task(task_id):
 
 @bp.route('/tasks/<int:task_id>/delete', methods=['POST'])
 @login_required
+@admin_required
 def delete_task(task_id):
-    """Delete a task"""
+    """Delete a task - admin only"""
     task = Task.query.get_or_404(task_id)
-    if task.user_id != current_user.id:
-        if request.headers.get('Content-Type') == 'application/json':
-            return jsonify({'error': 'Unauthorized'}), 403
-        flash('Unauthorized.', 'error')
-        return redirect(url_for('main.tasks'))
     
     deleted_task_id = task.id
     db.session.delete(task)
@@ -143,6 +137,7 @@ def alerts():
 
 @bp.route('/alerts/create', methods=['POST'])
 @login_required
+@admin_required
 def create_alert():
     """Create a new alert"""
     form = AlertForm()
@@ -211,6 +206,7 @@ def settings():
 
 @bp.route('/settings/update', methods=['POST'])
 @login_required
+@admin_required
 def update_settings():
     """Update pstrax credentials"""
     config = ScrapeConfig.query.first()

@@ -16,7 +16,7 @@
                     {{ form.hidden_tag() }}
                     <div class="mb-3">
                         {{ form.pstrax_base_url.label(class="form-label") }}
-                        {{ form.pstrax_base_url(class="form-control") }}
+                        {{ form.pstrax_base_url(class="form-control", disabled=(not current_user.is_admin)) }}
                         {% if form.pstrax_base_url.errors %}
                             <div class="text-danger small">
                                 {% for error in form.pstrax_base_url.errors %}
@@ -28,7 +28,7 @@
                     </div>
                     <div class="mb-3">
                         {{ form.pstrax_username.label(class="form-label") }}
-                        {{ form.pstrax_username(class="form-control") }}
+                        {{ form.pstrax_username(class="form-control", disabled=(not current_user.is_admin)) }}
                         {% if form.pstrax_username.errors %}
                             <div class="text-danger small">
                                 {% for error in form.pstrax_username.errors %}
@@ -40,7 +40,7 @@
                     </div>
                     <div class="mb-3">
                         {{ form.pstrax_password.label(class="form-label") }}
-                        {{ form.pstrax_password(class="form-control") }}
+                        {{ form.pstrax_password(class="form-control", disabled=(not current_user.is_admin)) }}
                         {% if form.pstrax_password.errors %}
                             <div class="text-danger small">
                                 {% for error in form.pstrax_password.errors %}
@@ -52,7 +52,7 @@
                     </div>
                     <div class="mb-3">
                         {{ form.scrape_interval.label(class="form-label") }}
-                        {{ form.scrape_interval(class="form-control", type="number", min="1") }}
+                        {{ form.scrape_interval(class="form-control", type="number", min="1", disabled=(not current_user.is_admin)) }}
                         {% if form.scrape_interval.errors %}
                             <div class="text-danger small">
                                 {% for error in form.scrape_interval.errors %}
@@ -62,12 +62,18 @@
                         {% endif %}
                         <small class="form-text text-muted">Interval in minutes between automatic scrapes (current: {{ config.scrape_interval }} minutes)</small>
                     </div>
+                    {% if current_user.is_admin %}
                     <button type="submit" class="btn btn-primary">
                         <i class="bi bi-save"></i> Save Settings
                     </button>
                     <button type="button" class="btn btn-outline-secondary ms-2" onclick="triggerScrape()">
                         <i class="bi bi-arrow-clockwise"></i> Trigger Scrape Now
                     </button>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> Only administrators can update settings.
+                    </div>
+                    {% endif %}
                 </form>
             </div>
         </div>

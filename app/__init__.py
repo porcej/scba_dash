@@ -29,9 +29,24 @@ def create_app(config_class=Config):
     # Initialize extensions with flask_app
     db.init_app(flask_app)
     login_manager.init_app(flask_app)
-    socketio.init_app(flask_app, async_mode=flask_app.config['SOCKETIO_ASYNC_MODE'])
     migrate.init_app(flask_app, db)
+    
+    # Initialize SocketIO BEFORE CSRF to ensure Socket.IO middleware processes requests first
+    # This ensures /socket.io/ requests are handled before CSRF protection can interfere
+    socketio.init_app(
+        flask_app,
+        async_mode=flask_app.config['SOCKETIO_ASYNC_MODE'],
+        cors_allowed_origins="*",
+        logger=True,
+        engineio_logger=True
+    )
+    
+    # Initialize CSRF after SocketIO so Socket.IO requests are handled first
     csrf.init_app(flask_app)
+    
+    # Note: Flask-SocketIO handles requests before CSRF can intercept them
+    # The socketio.init_app() registers middleware that processes /socket.io/ requests first
+    # If you still get CSRF errors, ensure socketio.init_app() is called before csrf.init_app()
     
     # Configure Flask-Login
     login_manager.login_view = 'auth.login'

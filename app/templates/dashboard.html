@@ -373,7 +373,8 @@
         return value || '';
     }
     
-    function renderGearListTable(gearData) {
+    // Expose renderGearListTable globally for Socket.IO updates
+    window.renderGearListTable = function(gearData) {
         const tbody = document.getElementById('gear-list-table-body');
         if (!tbody) return;
         
@@ -534,7 +535,7 @@
                         tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">Error: ${escapeHtml(data.error)}</td></tr>`;
                     }
                 } else if (data.data) {
-                    renderGearListTable(data.data);
+                    window.renderGearListTable(data.data);
                 }
             })
             .catch(error => {

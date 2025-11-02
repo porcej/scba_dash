@@ -48,7 +48,14 @@ let socket = null;
 
 function initSocketIO() {
     if (typeof io !== 'undefined') {
-        socket = io();
+        // Connect to Socket.IO server
+        // Socket.IO will automatically use the correct transport (websocket or polling)
+        socket = io({
+            transports: ['websocket', 'polling'],
+            reconnection: true,
+            reconnectionDelay: 1000,
+            reconnectionAttempts: 5
+        });
         
         socket.on('connect', function() {
             console.log('Socket.IO connected');
@@ -79,7 +86,17 @@ function initSocketIO() {
             console.log('Scrape update:', data);
             // Update dashboard if needed
             if (window.location.pathname.includes('/dashboard')) {
-                updateScrapedData(data);
+                // Update alerts table
+                if (window.updateScrapedDataFunction) {
+                    window.updateScrapedDataFunction(data);
+                }
+                // Update gear list if present in the update
+                if (data && data.gear_list) {
+                    console.log('Gear list update received:', data.gear_list);
+                    if (window.renderGearListTable) {
+                        window.renderGearListTable(data.gear_list);
+                    }
+                }
             }
         });
 

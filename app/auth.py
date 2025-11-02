@@ -13,6 +13,8 @@ def login():
         return redirect(url_for('main.dashboard'))
     
     if request.method == 'POST':
+        # CSRF protection is handled by Flask-WTF automatically
+        # If CSRF token is missing, Flask-WTF will raise an error which we catch
         username = request.form.get('username')
         password = request.form.get('password')
         

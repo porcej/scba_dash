@@ -469,6 +469,10 @@ def perform_scrape():
         print("Fetching SCBA alerts...")
         scba_alerts_response = scraper.getSCBAAlerts(base_url=base_url)
         
+        # Get SCBA gear list
+        print("Fetching SCBA gear list...")
+        gear_list_response = scraper.getGearList(base_url=base_url)
+        
         # Prepare data structure
         data = {
             'scraped_at': datetime.utcnow().isoformat(),
@@ -476,6 +480,7 @@ def perform_scrape():
             'status': 'success' if scba_alerts_response.status_code == 200 else 'error'
         }
         
+        # Process SCBA alerts
         if scba_alerts_response.status_code == 200:
             try:
                 # Try to parse JSON response
@@ -498,6 +503,25 @@ def perform_scrape():
             if 'login' in scba_alerts_response.url.lower():
                 data['error'] = 'Authentication expired - redirected to login'
         
+        # Process gear list
+        if gear_list_response.status_code == 200:
+            try:
+                gear_list_data = gear_list_response.json()
+                data['gear_list'] = gear_list_data
+                print(f"Successfully fetched gear list data")
+            except (ValueError, json.JSONDecodeError):
+                # If JSON parsing fails, try parsing response.text directly
+                try:
+                    gear_list_data = json.loads(gear_list_response.text)
+                    data['gear_list'] = gear_list_data
+                    print(f"Successfully parsed gear list JSON from response.text")
+                except (ValueError, json.JSONDecodeError):
+                    print(f"Warning: Failed to parse gear list JSON response")
+                    # Don't fail the whole scrape if gear list fails
+        else:
+            print(f"Warning: Failed to fetch gear list. Status: {gear_list_response.status_code}")
+            # Don't fail the whole scrape if gear list fails
+        
         # Store scraped data
         scrape_data = ScrapeData()
         scrape_data.set_data(data)
@@ -507,7 +531,7 @@ def perform_scrape():
         config.last_scrape = datetime.utcnow()
         db.session.commit()
         
-        # Emit update via SocketIO
+        # Emit update via SocketIO (includes both alerts and gear list)
         emit_scrape_update(data)
         
         print("Scraping completed successfully")

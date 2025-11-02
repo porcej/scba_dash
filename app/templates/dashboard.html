@@ -320,6 +320,31 @@
         return escapeHtml(dateDisplay);
     }
     
+    function parseDateString(dateStr) {
+        // Parse date string in MM/DD/YYYY format
+        if (!dateStr || dateStr === '') return null;
+        const parts = dateStr.split('/');
+        if (parts.length === 3) {
+            const month = parseInt(parts[0], 10) - 1; // JavaScript months are 0-indexed
+            const day = parseInt(parts[1], 10);
+            const year = parseInt(parts[2], 10);
+            return new Date(year, month, day);
+        }
+        return null;
+    }
+    
+    function isOverdue(dateStr) {
+        // Check if date is today or in the past
+        const date = parseDateString(dateStr);
+        if (!date) return false;
+        
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Reset time to start of day
+        date.setHours(0, 0, 0, 0); // Reset time to start of day
+        
+        return date <= today;
+    }
+    
     function parseLocation(locationObj) {
         if (!locationObj || !locationObj.display) return 'N/A';
         // Format: "10/28/2025 | EMS 201-EMS 201-MMR "
@@ -448,16 +473,39 @@
                 idSerialHtml = '';
             }
             
-            // Format Next Due (Hydro and Flow) with line break if both exist
-            let nextDueHtml = '';
+            // Check if dates are overdue for badge highlighting
+            const nextDoDisplay = gear.nextdue ? (gear.nextdue.display || '') : '';
+            const nextHydroDisplay = gear.nexthydro ? (gear.nexthydro.display || '') : '';
+            const nextFlowDisplay = gear.nextflow ? (gear.nextflow.display || '') : '';
+            
+            const isNextDoOverdue = isOverdue(nextDoDisplay);
+            const isNextHydroOverdue = isOverdue(nextHydroDisplay);
+            const isNextFlowOverdue = isOverdue(nextFlowDisplay);
+            
+            // Format Next Due with badges for overdue dates
+            let nextDueHtmlFormatted = '';
             if (nextHydro && nextFlow) {
-                nextDueHtml = `Hysro: ${formatDate(nextHydro)}<br>Flow: ${formatDate(nextFlow)}`;
+                const hydroFormatted = formatDate(nextHydro);
+                const flowFormatted = formatDate(nextFlow);
+                const hydroBadge = isNextHydroOverdue ? `<span class="badge bg-danger">${hydroFormatted}</span>` : hydroFormatted;
+                const flowBadge = isNextFlowOverdue ? `<span class="badge bg-danger">${flowFormatted}</span>` : flowFormatted;
+                nextDueHtmlFormatted = `Hydro: ${hydroBadge}<br>Flow: ${flowBadge}`;
             } else if (nextHydro) {
-                nextDueHtml = `Hydro: ${formatDate(nextHydro)}`;
+                const hydroFormatted = formatDate(nextHydro);
+                const hydroBadge = isNextHydroOverdue ? `<span class="badge bg-danger">${hydroFormatted}</span>` : hydroFormatted;
+                nextDueHtmlFormatted = `Hydro: ${hydroBadge}`;
             } else if (nextFlow) {
-                nextDueHtml = `Flow: ${formatDate(nextFlow)}`;
+                const flowFormatted = formatDate(nextFlow);
+                const flowBadge = isNextFlowOverdue ? `<span class="badge bg-danger">${flowFormatted}</span>` : flowFormatted;
+                nextDueHtmlFormatted = `Flow: ${flowBadge}`;
             } else {
-                nextDueHtml = '';
+                nextDueHtmlFormatted = '';
+            }
+            
+            // Format Next DO with badge if overdue
+            let nextDoFormatted = formatDate(nextDo);
+            if (isNextDoOverdue && nextDo !== 'N/A' && nextDo !== '') {
+                nextDoFormatted = `<span class="badge bg-danger">${nextDoFormatted}</span>`;
             }
             
             row.innerHTML = `
@@ -465,8 +513,8 @@
                 <td>${idSerialHtml}</td>
                 <td>${escapeHtml(description)}</td>
                 <td>${escapeHtml(location)}</td>
-                <td>${nextDueHtml}</td>
-                <td>${formatDate(nextDo)}</td>
+                <td>${nextDueHtmlFormatted}</td>
+                <td>${nextDoFormatted}</td>
             `;
             
             tbody.appendChild(row);

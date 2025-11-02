@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - SCBA Dashboard{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 col-lg-6">
+        <h2><i class="bi bi-gear"></i> Settings</h2>
+        
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Pstrax Configuration</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('main.update_settings') }}">
+                    {{ form.hidden_tag() }}
+                    <div class="mb-3">
+                        {{ form.pstrax_base_url.label(class="form-label") }}
+                        {{ form.pstrax_base_url(class="form-control") }}
+                        {% if form.pstrax_base_url.errors %}
+                            <div class="text-danger small">
+                                {% for error in form.pstrax_base_url.errors %}
+                                    <div>{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        <small class="form-text text-muted">Base URL of the pstrax website (e.g., https://pstrax.com)</small>
+                    </div>
+                    <div class="mb-3">
+                        {{ form.pstrax_username.label(class="form-label") }}
+                        {{ form.pstrax_username(class="form-control") }}
+                        {% if form.pstrax_username.errors %}
+                            <div class="text-danger small">
+                                {% for error in form.pstrax_username.errors %}
+                                    <div>{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        <small class="form-text text-muted">Username for logging into pstrax website</small>
+                    </div>
+                    <div class="mb-3">
+                        {{ form.pstrax_password.label(class="form-label") }}
+                        {{ form.pstrax_password(class="form-control") }}
+                        {% if form.pstrax_password.errors %}
+                            <div class="text-danger small">
+                                {% for error in form.pstrax_password.errors %}
+                                    <div>{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        <small class="form-text text-muted">Leave blank to keep current password</small>
+                    </div>
+                    <div class="mb-3">
+                        {{ form.scrape_interval.label(class="form-label") }}
+                        {{ form.scrape_interval(class="form-control", type="number", min="1") }}
+                        {% if form.scrape_interval.errors %}
+                            <div class="text-danger small">
+                                {% for error in form.scrape_interval.errors %}
+                                    <div>{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        <small class="form-text text-muted">Interval in minutes between automatic scrapes (current: {{ config.scrape_interval }} minutes)</small>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save"></i> Save Settings
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary ms-2" onclick="triggerScrape()">
+                        <i class="bi bi-arrow-clockwise"></i> Trigger Scrape Now
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        {% if config.last_scrape %}
+        <div class="card mt-3">
+            <div class="card-body">
+                <h6>Last Scrape</h6>
+                <p class="text-muted mb-0">{{ config.last_scrape.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+            </div>
+        </div>
+        {% endif %}
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="bi bi-question-circle"></i> Troubleshooting Login Issues</h6>
+            </div>
+            <div class="card-body">
+                <p class="small">If you're getting "Login failed" errors, check the following:</p>
+                <ul class="small">
+                    <li><strong>Verify credentials:</strong> Make sure your username and password are correct</li>
+                    <li><strong>Check the URL:</strong> Verify the Base URL is correct (the login page should be at <code>&lt;Base URL&gt;/login</code>)</li>
+                    <li><strong>Form fields:</strong> The scraper tries common field names, but may need customization</li>
+                    <li><strong>CAPTCHA:</strong> If the website uses CAPTCHA, the scraper cannot bypass it</li>
+                    <li><strong>Error details:</strong> Check the dashboard's scraped data section for detailed error information</li>
+                </ul>
+                <p class="small mb-0"><strong>Note:</strong> The scraper code in <code>app/scraper.py</code> may need to be customized for your specific pstrax website structure.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    function triggerScrape() {
+        fetchWithCSRF('/api/scrape/trigger', {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Scrape triggered successfully!');
+                setTimeout(() => location.reload(), 2000);
+            } else {
+                alert('Error: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error triggering scrape');
+        });
+    }
+</script>
+{% endblock %}
+

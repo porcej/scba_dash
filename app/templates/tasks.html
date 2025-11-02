@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block title %}Tasks - SCBA Dashboard{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2><i class="bi bi-list-check"></i> Task List</h2>
+        
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Add New Task</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('main.create_task') }}">
+                    {{ form.hidden_tag() }}
+                    <div class="mb-3">
+                        {{ form.content.label(class="form-label") }}
+                        {{ form.content(class="form-control", rows="3") }}
+                        {% if form.content.errors %}
+                            <div class="text-danger small">
+                                {% for error in form.content.errors %}
+                                    <div>{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    <div class="mb-3 form-check">
+                        {{ form.completed(class="form-check-input") }}
+                        {{ form.completed.label(class="form-check-label") }}
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i> Create Task
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Your Tasks ({{ tasks|length }})</h5>
+            </div>
+            <div class="card-body">
+                {% if tasks %}
+                <div class="list-group">
+                    {% for task in tasks %}
+                    <div class="list-group-item d-flex justify-content-between align-items-start" 
+                         data-task-id="{{ task.id }}">
+                        <div class="ms-2 me-auto">
+                            <div class="form-check">
+                                <input class="form-check-input task-checkbox" 
+                                       type="checkbox" 
+                                       data-task-id="{{ task.id }}"
+                                       {% if task.completed %}checked{% endif %}
+                                       onchange="toggleTask({{ task.id }})">
+                                <label class="form-check-label {% if task.completed %}text-decoration-line-through text-muted{% endif %}">
+                                    {{ task.content }}
+                                </label>
+                            </div>
+                            <small class="text-muted">
+                                Created: {{ task.created_at.strftime('%Y-%m-%d %H:%M') }}
+                                {% if task.updated_at != task.created_at %}
+                                    | Updated: {{ task.updated_at.strftime('%Y-%m-%d %H:%M') }}
+                                {% endif %}
+                            </small>
+                        </div>
+                        <div class="btn-group" role="group">
+                            <button type="button" 
+                                    class="btn btn-sm btn-outline-danger" 
+                                    onclick="deleteTask({{ task.id }})">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted">No tasks yet. Create your first task above!</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // Expose function for SocketIO updates
+    window.loadTasksFunction = function() {
+        location.reload();
+    };
+
+    function toggleTask(taskId) {
+        fetchWithCSRF(`/tasks/${taskId}/toggle`, {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const taskItem = document.querySelector(`[data-task-id="${taskId}"]`);
+                const label = taskItem.querySelector('label');
+                if (data.completed) {
+                    label.classList.add('text-decoration-line-through', 'text-muted');
+                } else {
+                    label.classList.remove('text-decoration-line-through', 'text-muted');
+                }
+            }
+        })
+        .catch(error => console.error('Error:', error));
+    }
+
+    function deleteTask(taskId) {
+        if (confirm('Are you sure you want to delete this task?')) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = `/tasks/${taskId}/delete`;
+            document.body.appendChild(form);
+            form.submit();
+        }
+    }
+</script>
+{% endblock %}
+

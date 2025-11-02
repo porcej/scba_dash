@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+
+{% block title %}User Management - SCBA Dashboard{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2><i class="bi bi-people"></i> User Management</h2>
+        
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Add New User</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('main.admin_create_user') }}">
+                    {{ form.hidden_tag() }}
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            {{ form.username.label(class="form-label") }}
+                            {{ form.username(class="form-control") }}
+                            {% if form.username.errors %}
+                                <div class="text-danger small">
+                                    {% for error in form.username.errors %}
+                                        <div>{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            {{ form.password.label(class="form-label") }}
+                            {{ form.password(class="form-control") }}
+                            {% if form.password.errors %}
+                                <div class="text-danger small">
+                                    {% for error in form.password.errors %}
+                                        <div>{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                            <small class="form-text text-muted">Minimum 6 characters</small>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="form-check mt-4">
+                                {{ form.is_admin(class="form-check-input") }}
+                                {{ form.is_admin.label(class="form-check-label") }}
+                            </div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-person-plus"></i> Create User
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">All Users ({{ users|length }})</h5>
+            </div>
+            <div class="card-body">
+                {% if users %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Role</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in users %}
+                            <tr>
+                                <td>
+                                    {{ user.username }}
+                                    {% if user.id == current_user.id %}
+                                        <span class="badge bg-info">You</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if user.is_admin %}
+                                        <span class="badge bg-danger">Admin</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">User</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ user.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td>
+                                    <div class="btn-group" role="group">
+                                        {% if user.id != current_user.id %}
+                                        <button type="button" 
+                                                class="btn btn-sm btn-outline-warning" 
+                                                onclick="toggleAdmin({{ user.id }}, {{ 'true' if user.is_admin else 'false' }})"
+                                                title="Toggle admin status">
+                                            <i class="bi bi-shield-check"></i>
+                                        </button>
+                                        <form method="POST" 
+                                              action="{{ url_for('main.admin_delete_user', user_id=user.id) }}" 
+                                              style="display: inline;" 
+                                              onsubmit="return confirm('Are you sure you want to delete user \"{{ user.username }}\"? This cannot be undone.');">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete user">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+                                        {% else %}
+                                        <span class="text-muted small">Current user</span>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">No users found.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    function toggleAdmin(userId, currentStatus) {
+        fetchWithCSRF(`/admin/users/${userId}/toggle-admin`, {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Reload after a short delay to show flash message
+                setTimeout(() => location.reload(), 500);
+            } else {
+                alert('Error: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error toggling admin status');
+        });
+    }
+</script>
+{% endblock %}
+

@@ -1,0 +1,399 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - SCBA Dashboard{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2><i class="bi bi-speedometer2"></i> Dashboard</h2>
+    </div>
+</div>
+
+<div class="row mt-3">
+    <!-- Tasks Section -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-list-check"></i> Recent Tasks</h5>
+            </div>
+            <div class="card-body">
+                {% if recent_tasks %}
+                <div class="list-group">
+                    {% for task in recent_tasks %}
+                    <div class="list-group-item">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" 
+                                   {% if task.completed %}checked disabled{% endif %}>
+                            <label class="form-check-label {% if task.completed %}text-decoration-line-through text-muted{% endif %}">
+                                {{ task.content }}
+                            </label>
+                        </div>
+                        <small class="text-muted">{{ task.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="mt-3">
+                    <a href="{{ url_for('main.tasks') }}" class="btn btn-sm btn-outline-primary">
+                        View All Tasks <i class="bi bi-arrow-right"></i>
+                    </a>
+                </div>
+                {% else %}
+                <p class="text-muted">No tasks yet. <a href="{{ url_for('main.tasks') }}">Create your first task</a>!</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Gear List Section -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-gear"></i> SCBA Gear List</h5>
+            </div>
+            <div class="card-body" id="gear-list-container">
+                <div id="gear-list-table-container" class="table-responsive" style="max-height: 550px; overflow-y: auto;">
+                    <table class="table table-striped table-hover table-sm" id="gear-list-table">
+                        <thead>
+                            <tr>
+                                <th>Gear ID</th>
+                                <th>Internal ID</th>
+                                <th>Gear Type</th>
+                            </tr>
+                        </thead>
+                        <tbody id="gear-list-table-body">
+                            <tr>
+                                <td colspan="3" class="text-center text-muted">Loading gear list...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scraped Data Section -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-download"></i> SCBA Alerts</h5>
+            </div>
+            <div class="card-body" id="scraped-data-container" style="display: flex; flex-direction: column; padding: 0; height: calc(100vh - 250px);">
+                {% if scraped_data %}
+                    {% if scraped_data.status == 'success' and scraped_data.data %}
+                        <div id="alerts-table-container" class="table-responsive" style="height: 100%; overflow-y: auto; flex: 1;">
+                            <table class="table table-striped table-hover table-sm" id="alerts-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Internal ID</th>
+                                        <th>Equipment</th>
+                                        <th>Alert Text</th>
+                                        <th>Status</th>
+                                        <th>Priority</th>
+                                        <th>Opened By</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="alerts-table-body">
+                                    <!-- Will be populated by JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
+                    {% elif scraped_data.error_details and scraped_data.error_details is iterable %}
+                        {# Handle case where data is in error_details (from recent changes) #}
+                        <div id="alerts-table-container" class="table-responsive" style="height: 100%; overflow-y: auto; flex: 1;">
+                            <table class="table table-striped table-hover table-sm" id="alerts-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Internal ID</th>
+                                        <th>Equipment</th>
+                                        <th>Alert Text</th>
+                                        <th>Status</th>
+                                        <th>Priority</th>
+                                        <th>Opened By</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="alerts-table-body">
+                                    <!-- Will be populated by JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-warning" style="margin: 1rem;">
+                            <strong>Status:</strong> {{ scraped_data.status or 'Unknown' }}<br>
+                            {% if scraped_data.error %}
+                                <strong>Error:</strong> {{ scraped_data.error }}
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                {% else %}
+                    <p class="text-muted" style="margin: 1rem;">No scraped data available yet. Configure credentials in <a href="{{ url_for('main.settings') }}">Settings</a> to start scraping.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // Initialize alerts data from server
+    var initialAlertsData = null;
+    {% if scraped_data %}
+        {% if scraped_data.status == 'success' and scraped_data.data %}
+            initialAlertsData = {{ scraped_data.data.data | tojson | safe }};
+        {% elif scraped_data.error_details %}
+            {% if scraped_data.error_details is iterable and scraped_data.error_details is not string %}
+                initialAlertsData = {{ scraped_data.error_details | tojson | safe }};
+            {% endif %}
+        {% endif %}
+    {% endif %}
+    
+    function renderAlertsTable(alertsData) {
+        const tbody = document.getElementById('alerts-table-body');
+        if (!tbody) return;
+        
+        // Clear existing rows
+        tbody.innerHTML = '';
+        
+        if (!alertsData || !Array.isArray(alertsData) || alertsData.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No alerts found</td></tr>';
+            return;
+        }
+        
+        // Render each alert as a table row
+        alertsData.forEach(function(alert) {
+            const row = document.createElement('tr');
+            
+            // Format alert text - replace <br/> with newlines and preserve whitespace
+            let alertText = alert.alert_text || '';
+            // Replace <br/>, <br>, </br> and similar tags with newlines
+            alertText = alertText.replace(/<br\s*\/?>/gi, '\n');
+            // Remove other HTML tags (keep only text content)
+            alertText = alertText.replace(/<[^>]+>/g, '');
+            // HTML escape the text
+            alertText = escapeHtml(alertText);
+            // Convert newlines to <br> for display
+            alertText = alertText.replace(/\n/g, '<br>');
+            
+            // Format alert comments - same processing as alert text
+            let alertComments = alert.alertcomments || '';
+            if (alertComments) {
+                // Replace <br/>, <br>, </br> and similar tags with newlines
+                alertComments = alertComments.replace(/<br\s*\/?>/gi, '\n');
+                // Remove other HTML tags
+                alertComments = alertComments.replace(/<[^>]+>/g, '');
+                // HTML escape the text
+                alertComments = escapeHtml(alertComments);
+                // Convert newlines to <br> for display
+                alertComments = alertComments.replace(/\n/g, '<br>');
+                // Add separator and format comments (theme-aware color)
+                const commentColor = document.documentElement.getAttribute('data-theme') === 'dark' ? '#adb5bd' : '#6c757d';
+                alertText += '<br><br><em style="color: ' + commentColor + '; font-size: 0.9em;"><strong>Comments:</strong><br>' + alertComments + '</em>';
+            }
+            
+            // Format date
+            const alertDate = alert.alert_date || '';
+            
+            // Equipment name (combine equip_name and model/mfr if available)
+            let equipment = alert.equip_name || '';
+            if (alert.model) {
+                equipment += (equipment ? ' - ' : '') + alert.model;
+            }
+            if (!equipment && alert.internal_id) {
+                equipment = alert.internal_id;
+            }
+            
+            row.innerHTML = `
+                <td>${escapeHtml(alertDate)}</td>
+                <td><strong>${escapeHtml(alert.internal_id || 'N/A')}</strong></td>
+                <td>${escapeHtml(equipment || 'N/A')}</td>
+                <td style="white-space: normal; word-wrap: break-word;">${alertText}</td>
+                <td><span class="badge ${getStatusBadgeClass(alert.status_text)}">${escapeHtml(alert.status_text || 'N/A')}</span></td>
+                <td>${escapeHtml(alert.priority || 'N/A')}</td>
+                <td>${escapeHtml(alert.openedby || 'N/A')}</td>
+            `;
+            
+            tbody.appendChild(row);
+        });
+    }
+    
+    function escapeHtml(text) {
+        if (text == null) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    function getStatusBadgeClass(status) {
+        if (!status) return 'bg-secondary';
+        status = status.toLowerCase();
+        if (status === 'active') return 'bg-danger';
+        if (status === 'cache') return 'bg-warning';
+        if (status === 'closed') return 'bg-success';
+        return 'bg-secondary';
+    }
+    
+    function extractAlertsData(data) {
+        // Try to extract alerts array from various possible data structures
+        if (!data) return null;
+        
+        // Case 1: data.data is the alerts array
+        if (data.data && Array.isArray(data.data)) {
+            return data.data;
+        }
+        
+        // Case 2: data.error_details is the alerts array (from recent scraper changes)
+        if (data.error_details && Array.isArray(data.error_details)) {
+            return data.error_details;
+        }
+        
+        // Case 3: data itself is the array
+        if (Array.isArray(data)) {
+            return data;
+        }
+        
+        // Case 4: nested structure
+        if (data.data && data.data.data && Array.isArray(data.data.data)) {
+            return data.data.data;
+        }
+        
+        return null;
+    }
+    
+    // Function to update scraped data on SocketIO updates
+    window.updateScrapedDataFunction = function(data) {
+        const container = document.getElementById('scraped-data-container');
+        if (!container) return;
+        
+        // Extract alerts array from data
+        const alertsData = extractAlertsData(data);
+        
+        if (alertsData) {
+            // Ensure container has flex styling
+            container.style.display = 'flex';
+            container.style.flexDirection = 'column';
+            container.style.padding = '0';
+            container.style.height = 'calc(100vh - 250px)';
+            
+            // Update container to show table if needed
+            if (!container.querySelector('#alerts-table-container')) {
+                container.innerHTML = `
+                    <div id="alerts-table-container" class="table-responsive" style="height: 100%; overflow-y: auto; flex: 1;">
+                        <table class="table table-striped table-hover table-sm" id="alerts-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Internal ID</th>
+                                    <th>Equipment</th>
+                                    <th>Alert Text</th>
+                                    <th>Status</th>
+                                    <th>Priority</th>
+                                    <th>Opened By</th>
+                                </tr>
+                            </thead>
+                            <tbody id="alerts-table-body"></tbody>
+                        </table>
+                    </div>
+                `;
+            }
+            
+            renderAlertsTable(alertsData);
+        } else if (data && data.status) {
+            // Show error or status message
+            container.style.display = 'block';
+            container.style.padding = '1rem';
+            const statusClass = data.status === 'error' ? 'alert-danger' : 'alert-warning';
+            container.innerHTML = `
+                <div class="alert ${statusClass}">
+                    <strong>Status:</strong> ${escapeHtml(data.status)}<br>
+                    ${data.error ? '<strong>Error:</strong> ' + escapeHtml(data.error) : ''}
+                </div>
+            `;
+        }
+    };
+    
+    // Gear List Functions
+    function renderGearListTable(gearData) {
+        const tbody = document.getElementById('gear-list-table-body');
+        if (!tbody) return;
+        
+        // Clear existing rows
+        tbody.innerHTML = '';
+        
+        // Extract data array from response structure
+        let gearArray = null;
+        if (gearData && gearData.data && Array.isArray(gearData.data)) {
+            gearArray = gearData.data;
+        } else if (Array.isArray(gearData)) {
+            gearArray = gearData;
+        }
+        
+        if (!gearArray || gearArray.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">No gear found</td></tr>';
+            return;
+        }
+        
+        // Render each gear item as a table row
+        gearArray.forEach(function(gear) {
+            const row = document.createElement('tr');
+            
+            row.innerHTML = `
+                <td><strong>${escapeHtml(gear.gearid || 'N/A')}</strong></td>
+                <td>${escapeHtml(gear.internalid || 'N/A')}</td>
+                <td>${escapeHtml(gear.geartype || 'N/A')}</td>
+            `;
+            
+            tbody.appendChild(row);
+        });
+    }
+    
+    function loadGearList() {
+        fetch('/api/gear-list')
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    const tbody = document.getElementById('gear-list-table-body');
+                    if (tbody) {
+                        tbody.innerHTML = `<tr><td colspan="3" class="text-center text-danger">Error: ${escapeHtml(data.error)}</td></tr>`;
+                    }
+                } else if (data.data) {
+                    renderGearListTable(data.data);
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching gear list:', error);
+                const tbody = document.getElementById('gear-list-table-body');
+                if (tbody) {
+                    tbody.innerHTML = `<tr><td colspan="3" class="text-center text-danger">Error loading gear list</td></tr>`;
+                }
+            });
+    }
+    
+    // Initialize tables on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize alerts table
+        if (initialAlertsData) {
+            renderAlertsTable(initialAlertsData);
+        }
+        
+        // Load gear list
+        loadGearList();
+        
+        // Periodically refresh gear list
+        setInterval(loadGearList, 60000); // Refresh every 60 seconds
+    });
+    
+    // Periodically refresh scraped data
+    setInterval(function() {
+        fetch('/api/scrape-data')
+            .then(response => response.json())
+            .then(data => {
+                const alertsData = extractAlertsData(data);
+                if (alertsData || (data && data.status)) {
+                    window.updateScrapedDataFunction(data);
+                }
+            })
+            .catch(error => console.error('Error fetching scrape data:', error));
+    }, 30000); // Refresh every 30 seconds
+</script>
+{% endblock %}
+

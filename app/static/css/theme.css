@@ -1,0 +1,145 @@
+/* CSS Custom Properties for Theming */
+:root[data-theme="light"] {
+    --bg-color: #ffffff;
+    --text-color: #212529;
+    --card-bg: #ffffff;
+    --border-color: #dee2e6;
+    --shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    --hover-bg: #f8f9fa;
+}
+
+:root[data-theme="dark"] {
+    --bg-color: #1a1a1a;
+    --text-color: #e9ecef;
+    --card-bg: #2d2d2d;
+    --border-color: #495057;
+    --shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.5);
+    --hover-bg: #3a3a3a;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    transition: background-color 0.3s ease, color 0.3s ease;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Override Bootstrap dark theme colors when in dark mode */
+[data-theme="dark"] .card {
+    background-color: var(--card-bg);
+    border-color: var(--border-color);
+    color: var(--text-color);
+}
+
+[data-theme="dark"] .form-control,
+[data-theme="dark"] .form-select {
+    background-color: var(--card-bg);
+    border-color: var(--border-color);
+    color: var(--text-color);
+}
+
+[data-theme="dark"] .form-control:focus,
+[data-theme="dark"] .form-select:focus {
+    background-color: var(--card-bg);
+    border-color: #0d6efd;
+    color: var(--text-color);
+}
+
+[data-theme="dark"] .list-group-item {
+    background-color: var(--card-bg);
+    border-color: var(--border-color);
+    color: var(--text-color);
+}
+
+[data-theme="dark"] .table {
+    --bs-table-bg: var(--card-bg);
+    --bs-table-color: var(--text-color);
+    --bs-table-border-color: var(--border-color);
+}
+
+/* SCBA Alerts table specific dark mode styling */
+[data-theme="dark"] .table-striped > tbody > tr:nth-of-type(odd) > td,
+[data-theme="dark"] .table-striped > tbody > tr:nth-of-type(odd) > th {
+    background-color: var(--card-bg);
+    color: var(--text-color);
+}
+
+[data-theme="dark"] .table-striped > tbody > tr:nth-of-type(even) > td,
+[data-theme="dark"] .table-striped > tbody > tr:nth-of-type(even) > th {
+    background-color: var(--hover-bg);
+    color: var(--text-color);
+}
+
+[data-theme="dark"] .table-hover > tbody > tr:hover > td,
+[data-theme="dark"] .table-hover > tbody > tr:hover > th {
+    background-color: #4a4a4a;
+    color: var(--text-color);
+}
+
+[data-theme="dark"] .table td,
+[data-theme="dark"] .table th {
+    color: var(--text-color) !important;
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .table thead th {
+    background-color: var(--hover-bg);
+    color: var(--text-color);
+    border-color: var(--border-color);
+}
+
+/* Fix text-muted in dark mode */
+[data-theme="dark"] .text-muted {
+    color: #adb5bd !important;
+}
+
+/* Theme-aware pre/code blocks */
+[data-theme="light"] .scraped-data-pre {
+    background-color: #f8f9fa;
+    color: #212529;
+    border: 1px solid var(--border-color);
+}
+
+[data-theme="dark"] .scraped-data-pre {
+    background-color: var(--card-bg);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+}
+
+/* Fix bg-light class in dark mode */
+[data-theme="dark"] .bg-light {
+    background-color: var(--card-bg) !important;
+    color: var(--text-color) !important;
+}
+
+/* Alert Banner */
+.alert-banner {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1050;
+    transition: transform 0.3s ease;
+}
+
+.alert-banner.d-none {
+    transform: translateY(100%);
+}
+
+/* Adjust main content when alert is active */
+body.alert-active main {
+    padding-bottom: 80px;
+}
+
+/* Smooth transitions */
+.card {
+    transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+}
+
+.form-control,
+.form-select {
+    transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+}
+

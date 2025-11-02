@@ -152,7 +152,30 @@ sudo supervisorctl start scba-dash
 
 ## Reverse Proxy Setup (Nginx)
 
-For production, use Nginx as a reverse proxy. Create `/etc/nginx/sites-available/scba-dash`:
+For production, use Nginx as a reverse proxy. See `nginx.conf.example` for a complete configuration example.
+
+To set up Nginx:
+
+1. Copy the example configuration:
+```bash
+sudo cp nginx.conf.example /etc/nginx/sites-available/scba-dash
+sudo nano /etc/nginx/sites-available/scba-dash
+```
+
+2. Update the following in the config file:
+   - Replace `your-domain.com` with your actual domain
+   - Update SSL certificate paths
+   - Update static file path (`/path/to/scba_dash/app/static`)
+   - Update upstream server if using different port
+
+3. Enable the site:
+```bash
+sudo ln -s /etc/nginx/sites-available/scba-dash /etc/nginx/sites-enabled/
+sudo nginx -t  # Test configuration
+sudo systemctl reload nginx
+```
+
+Or create `/etc/nginx/sites-available/scba-dash` manually:
 
 ```nginx
 upstream scba_dash {

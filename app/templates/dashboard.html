@@ -31,7 +31,12 @@
                                 {{ task.content }}
                             </label>
                         </div>
-                        <small class="text-muted">{{ task.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                        <small class="text-muted">
+                            <span class="badge {% if task.priority == 1 %}bg-danger{% elif task.priority == 2 %}bg-warning{% else %}bg-secondary{% endif %}">
+                                {{ task.get_priority_label() }}
+                            </span>
+                            | {{ task.created_at.strftime('%Y-%m-%d %H:%M') }}
+                        </small>
                     </div>
                     {% endfor %}
                 </div>
@@ -620,11 +625,7 @@
             }
             
             const taskElement = createDashboardTaskElement(data);
-            listContainer.insertBefore(taskElement, listContainer.firstChild);
-            // Keep only 5 most recent
-            while (listContainer.children.length > 5) {
-                listContainer.removeChild(listContainer.lastChild);
-            }
+            insertTaskInPriorityOrder(listContainer, taskElement, data);
             return;
         }
         
@@ -647,11 +648,7 @@
             const existingTask = listContainer.querySelector(`[data-task-id="${data.id}"]`);
             if (!existingTask) {
                 const taskElement = createDashboardTaskElement(data);
-                listContainer.insertBefore(taskElement, listContainer.firstChild);
-                // Keep only 5 most recent
-                while (listContainer.children.length > 5) {
-                    listContainer.removeChild(listContainer.lastChild);
-                }
+                insertTaskInPriorityOrder(listContainer, taskElement, data);
             }
             return;
         }
@@ -696,6 +693,7 @@
         const taskDiv = document.createElement('div');
         taskDiv.className = 'list-group-item';
         taskDiv.setAttribute('data-task-id', task.id);
+        taskDiv.setAttribute('data-task-priority', task.priority || 2);
         
         const dateStr = task.created_at ? new Date(task.created_at).toLocaleString('en-US', {
             year: 'numeric',
@@ -705,6 +703,14 @@
             minute: '2-digit'
         }) : '';
         
+        // Priority badge
+        const priority = task.priority || 2;
+        const priorityLabels = {1: 'High', 2: 'Medium', 3: 'Low'};
+        const priorityClasses = {1: 'bg-danger', 2: 'bg-warning', 3: 'bg-secondary'};
+        const priorityLabel = priorityLabels[priority] || 'Medium';
+        const priorityClass = priorityClasses[priority] || 'bg-secondary';
+        const priorityBadge = `<span class="badge ${priorityClass}">${priorityLabel}</span>`;
+        
         taskDiv.innerHTML = `
             <div class="form-check">
                 <input class="form-check-input dashboard-task-checkbox" 
@@ -713,10 +719,61 @@
                        onchange="toggleDashboardTask(${task.id})">
                 <label class="form-check-label">${escapeHtml(task.content)}</label>
             </div>
-            <small class="text-muted">${dateStr}</small>
+            <small class="text-muted">
+                ${priorityBadge} | ${dateStr}
+            </small>
         `;
         
         return taskDiv;
+    }
+    
+    function insertTaskInPriorityOrder(container, taskElement, taskData) {
+        // Get priority and created_at from task data
+        const taskPriority = taskData?.priority || parseInt(taskElement.getAttribute('data-task-priority') || '2');
+        const taskCreated = taskData?.created_at || '';
+        
+        // Convert all children to array for sorting
+        const children = Array.from(container.children);
+        
+        // Find insertion point: insert after tasks with same or lower priority, before higher priority
+        let insertIndex = 0;
+        for (let i = 0; i < children.length; i++) {
+            const child = children[i];
+            const childPriority = parseInt(child.getAttribute('data-task-priority') || '2');
+            
+            // If this task has higher priority (lower number), insert before tasks with lower priority
+            if (taskPriority < childPriority) {
+                insertIndex = i;
+                break;
+            }
+            // If same priority, sort by created_at (newer first = descending)
+            if (taskPriority === childPriority && taskCreated) {
+                const childCreated = child.getAttribute('data-task-created') || '';
+                // For same priority, newer tasks come first (descending order)
+                if (childCreated && taskCreated > childCreated) {
+                    insertIndex = i;
+                    break;
+                }
+            }
+            insertIndex = i + 1;
+        }
+        
+        // Store created_at timestamp for future sorting
+        if (taskCreated) {
+            taskElement.setAttribute('data-task-created', taskCreated);
+        }
+        
+        // Insert at the calculated position
+        if (insertIndex >= children.length) {
+            container.appendChild(taskElement);
+        } else {
+            container.insertBefore(taskElement, children[insertIndex]);
+        }
+        
+        // Keep only 5 tasks (already sorted by priority)
+        while (container.children.length > 5) {
+            container.removeChild(container.lastChild);
+        }
     }
 </script>
 {% endblock %}

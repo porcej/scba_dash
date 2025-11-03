@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, TextAreaField, BooleanField, DateTimeField, PasswordField
+from wtforms import StringField, TextAreaField, BooleanField, DateTimeField, PasswordField, SelectField
 from wtforms.validators import DataRequired, Optional, Length
 from wtforms.widgets import TextArea
 
@@ -8,6 +8,11 @@ class TaskForm(FlaskForm):
     """Form for creating/editing tasks"""
     content = TextAreaField('Task Content', validators=[DataRequired(), Length(min=1, max=1000)])
     completed = BooleanField('Completed', default=False)
+    priority = SelectField('Priority', 
+                          choices=[(1, 'High'), (2, 'Medium'), (3, 'Low')],
+                          coerce=int,
+                          default=2,
+                          validators=[DataRequired()])
 
 
 class AlertForm(FlaskForm):

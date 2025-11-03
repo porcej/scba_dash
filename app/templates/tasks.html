@@ -26,6 +26,17 @@
                             </div>
                         {% endif %}
                     </div>
+                    <div class="mb-3">
+                        {{ form.priority.label(class="form-label") }}
+                        {{ form.priority(class="form-select") }}
+                        {% if form.priority.errors %}
+                            <div class="text-danger small">
+                                {% for error in form.priority.errors %}
+                                    <div>{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
                     <div class="mb-3 form-check">
                         {{ form.completed(class="form-check-input") }}
                         {{ form.completed.label(class="form-check-label") }}
@@ -47,7 +58,8 @@
                 <div class="list-group">
                     {% for task in tasks %}
                     <div class="list-group-item d-flex justify-content-between align-items-start" 
-                         data-task-id="{{ task.id }}">
+                         data-task-id="{{ task.id }}"
+                         data-task-priority="{{ task.priority }}">
                         <div class="ms-2 me-auto">
                             <div class="form-check">
                                 <input class="form-check-input task-checkbox" 
@@ -61,7 +73,10 @@
                                 </label>
                             </div>
                             <small class="text-muted">
-                                Created: {{ task.created_at.strftime('%Y-%m-%d %H:%M') }}
+                                <span class="badge {% if task.priority == 1 %}bg-danger{% elif task.priority == 2 %}bg-warning{% else %}bg-secondary{% endif %}">
+                                    {{ task.get_priority_label() }}
+                                </span>
+                                | Created: {{ task.created_at.strftime('%Y-%m-%d %H:%M') }}
                                 {% if task.updated_at != task.created_at %}
                                     | Updated: {{ task.updated_at.strftime('%Y-%m-%d %H:%M') }}
                                 {% endif %}
@@ -122,6 +137,14 @@
         const updatedAt = formatTaskDate(task.updated_at);
         const updatedText = updatedAt !== createdAt ? ` | Updated: ${updatedAt}` : '';
         
+        // Priority badge
+        const priority = task.priority || 2;
+        const priorityLabels = {1: 'High', 2: 'Medium', 3: 'Low'};
+        const priorityClasses = {1: 'bg-danger', 2: 'bg-warning', 3: 'bg-secondary'};
+        const priorityLabel = priorityLabels[priority] || 'Medium';
+        const priorityClass = priorityClasses[priority] || 'bg-secondary';
+        const priorityBadge = `<span class="badge ${priorityClass}">${priorityLabel}</span>`;
+        
         // Check if current user is admin (we'll need to pass this or check a global variable)
         const isAdmin = {% if current_user.is_admin %}true{% else %}false{% endif %};
         
@@ -154,7 +177,7 @@
                     </label>
                 </div>
                 <small class="text-muted">
-                    Created: ${createdAt}${updatedText}
+                    ${priorityBadge} | Created: ${createdAt}${updatedText}
                 </small>
             </div>
             ${adminButtons}
@@ -207,11 +230,22 @@
             return;
         }
         
+        // Get current priority from the task item
+        const currentPriority = taskItem.getAttribute('data-task-priority') || '2';
+        
         // Create edit form
         const editForm = document.createElement('div');
         editForm.className = 'task-edit-form mt-2';
         editForm.innerHTML = `
             <textarea class="form-control task-edit-content" rows="3" style="resize: vertical;">${escapeHtml(currentContent)}</textarea>
+            <div class="mt-2">
+                <label class="form-label small">Priority</label>
+                <select class="form-select form-select-sm task-edit-priority">
+                    <option value="1" ${currentPriority === '1' ? 'selected' : ''}>High</option>
+                    <option value="2" ${currentPriority === '2' ? 'selected' : ''}>Medium</option>
+                    <option value="3" ${currentPriority === '3' ? 'selected' : ''}>Low</option>
+                </select>
+            </div>
             <div class="mt-2">
                 <button type="button" class="btn btn-sm btn-success" onclick="saveTask(${taskId})">
                     <i class="bi bi-check"></i> Save
@@ -225,7 +259,19 @@
         // Hide the label and insert form
         if (label) {
             label.style.display = 'none';
-            label.parentElement.appendChild(editForm);
+            // Insert form after the form-check div (parent of label)
+            // The structure is: ms-2 me-auto > form-check > label
+            const formCheckDiv = label.parentElement; // form-check div
+            const containerDiv = formCheckDiv ? formCheckDiv.parentElement : null; // ms-2 me-auto div
+            if (containerDiv) {
+                // Insert after the form-check div, before the small element
+                containerDiv.insertBefore(editForm, formCheckDiv.nextSibling);
+            } else {
+                // Fallback: append to form-check parent
+                if (formCheckDiv && formCheckDiv.parentElement) {
+                    formCheckDiv.parentElement.appendChild(editForm);
+                }
+            }
         }
         
         // Focus the textarea
@@ -269,9 +315,11 @@
             return;
         }
         
-        // Get current checkbox state
+        // Get current checkbox state and priority
         const checkbox = taskItem.querySelector('input[type="checkbox"]');
         const isCompleted = checkbox ? checkbox.checked : false;
+        const prioritySelect = editForm.querySelector('.task-edit-priority');
+        const priority = prioritySelect ? parseInt(prioritySelect.value) : 2;
         
         // Send update request
         fetchWithCSRF(`/tasks/${taskId}/update`, {
@@ -281,7 +329,8 @@
             },
             body: JSON.stringify({
                 content: newContent,
-                completed: isCompleted
+                completed: isCompleted,
+                priority: priority
             })
         })
         .then(response => response.json())

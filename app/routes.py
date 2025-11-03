@@ -75,7 +75,7 @@ def index():
 def dashboard():
     """Main dashboard view"""
     # Get recent incomplete tasks (all users, since only admins can create tasks)
-    recent_tasks = Task.query.filter_by(completed=False).order_by(Task.created_at.desc()).limit(5).all()
+    recent_tasks = Task.query.filter_by(completed=False).order_by(Task.priority.asc(), Task.created_at.desc()).limit(5).all()
     
     # Get latest scraped data
     latest_scrape = ScrapeData.query.order_by(ScrapeData.scraped_at.desc()).first()
@@ -95,7 +95,7 @@ def dashboard():
 def tasks():
     """Task list management page"""
     # Show all tasks to all users (since only admins can create tasks)
-    all_tasks = Task.query.order_by(Task.created_at.desc()).all()
+    all_tasks = Task.query.order_by(Task.priority.asc(), Task.created_at.desc()).all()
     form = TaskForm()
     return render_template('tasks.html', tasks=all_tasks, form=form)
 
@@ -110,6 +110,7 @@ def create_task():
         task = Task(
             content=form.content.data,
             completed=form.completed.data,
+            priority=form.priority.data,
             user_id=current_user.id
         )
         db.session.add(task)
@@ -143,6 +144,7 @@ def update_task(task_id):
         
         task.content = content
         task.completed = data.get('completed', task.completed)
+        task.priority = data.get('priority', task.priority)
         task.updated_at = datetime.utcnow()
         db.session.commit()
         emit_task_update(task.id, action='updated')
@@ -154,6 +156,7 @@ def update_task(task_id):
     if form.validate_on_submit():
         task.content = form.content.data
         task.completed = form.completed.data
+        task.priority = form.priority.data
         task.updated_at = datetime.utcnow()
         db.session.commit()
         emit_task_update(task.id, action='updated')
@@ -376,7 +379,7 @@ def get_active_alert():
 @login_required
 def api_tasks():
     """API endpoint to get user tasks"""
-    tasks = Task.query.filter_by(user_id=current_user.id).order_by(Task.created_at.desc()).all()
+    tasks = Task.query.filter_by(user_id=current_user.id).order_by(Task.priority.asc(), Task.created_at.desc()).all()
     return jsonify({'tasks': [task.to_dict() for task in tasks]})
 
 

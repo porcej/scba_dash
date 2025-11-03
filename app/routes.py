@@ -128,14 +128,42 @@ def update_task(task_id):
     """Update an existing task - admin only"""
     task = Task.query.get_or_404(task_id)
     
+    # Handle JSON requests (AJAX)
+    if request.is_json or request.headers.get('Content-Type') == 'application/json':
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'errors': {'content': ['No data provided']}}), 400
+        
+        content = data.get('content', '').strip()
+        if not content:
+            return jsonify({'success': False, 'errors': {'content': ['Task content cannot be empty']}}), 400
+        
+        if len(content) > 1000:
+            return jsonify({'success': False, 'errors': {'content': ['Task content cannot exceed 1000 characters']}}), 400
+        
+        task.content = content
+        task.completed = data.get('completed', task.completed)
+        task.updated_at = datetime.utcnow()
+        db.session.commit()
+        emit_task_update(task.id, action='updated')
+        
+        return jsonify({'success': True, 'task': task.to_dict()})
+    
+    # Handle form submissions
     form = TaskForm()
     if form.validate_on_submit():
         task.content = form.content.data
         task.completed = form.completed.data
         task.updated_at = datetime.utcnow()
         db.session.commit()
-        emit_task_update(task.id)
+        emit_task_update(task.id, action='updated')
         flash('Task updated successfully!', 'success')
+        return redirect(url_for('main.tasks'))
+    
+    # Form validation errors
+    errors = {field: [error for error in field_errors] for field, field_errors in form.errors.items()}
+    if errors:
+        flash('Error updating task. Please check the form.', 'error')
     return redirect(url_for('main.tasks'))
 
 

@@ -55,7 +55,8 @@
                                        data-task-id="{{ task.id }}"
                                        {% if task.completed %}checked{% endif %}
                                        onchange="toggleTask({{ task.id }})">
-                                <label class="form-check-label {% if task.completed %}text-decoration-line-through text-muted{% endif %}">
+                                <label class="form-check-label {% if task.completed %}text-decoration-line-through text-muted{% endif %}" 
+                                       data-task-content="{{ task.id }}">
                                     {{ task.content }}
                                 </label>
                             </div>
@@ -68,6 +69,11 @@
                         </div>
                         {% if current_user.is_admin %}
                         <div class="btn-group" role="group">
+                            <button type="button" 
+                                    class="btn btn-sm btn-outline-primary" 
+                                    onclick="editTask({{ task.id }})">
+                                <i class="bi bi-pencil"></i>
+                            </button>
                             <button type="button" 
                                     class="btn btn-sm btn-outline-danger" 
                                     onclick="deleteTask({{ task.id }})">
@@ -116,15 +122,34 @@
         const updatedAt = formatTaskDate(task.updated_at);
         const updatedText = updatedAt !== createdAt ? ` | Updated: ${updatedAt}` : '';
         
+        // Check if current user is admin (we'll need to pass this or check a global variable)
+        const isAdmin = {% if current_user.is_admin %}true{% else %}false{% endif %};
+        
+        const adminButtons = isAdmin ? `
+            <div class="btn-group" role="group">
+                <button type="button" 
+                        class="btn btn-sm btn-outline-primary" 
+                        onclick="editTask(${task.id})">
+                    <i class="bi bi-pencil"></i>
+                </button>
+                <button type="button" 
+                        class="btn btn-sm btn-outline-danger" 
+                        onclick="deleteTask(${task.id})">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        ` : '';
+        
         taskItem.innerHTML = `
-            <div class="ms-2 me-auto">
+            <div class="ms-2 me-auto" style="flex: 1;">
                 <div class="form-check">
                     <input class="form-check-input task-checkbox" 
                            type="checkbox" 
                            data-task-id="${task.id}"
                            ${task.completed ? 'checked' : ''}
                            onchange="toggleTask(${task.id})">
-                    <label class="form-check-label ${task.completed ? 'text-decoration-line-through text-muted' : ''}">
+                    <label class="form-check-label ${task.completed ? 'text-decoration-line-through text-muted' : ''}" 
+                           data-task-content="${task.id}">
                         ${escapeHtml(task.content)}
                     </label>
                 </div>
@@ -132,13 +157,7 @@
                     Created: ${createdAt}${updatedText}
                 </small>
             </div>
-            <div class="btn-group" role="group">
-                <button type="button" 
-                        class="btn btn-sm btn-outline-danger" 
-                        onclick="deleteTask(${task.id})">
-                    <i class="bi bi-trash"></i>
-                </button>
-            </div>
+            ${adminButtons}
         `;
         
         return taskItem;
@@ -170,6 +189,120 @@
             }
         })
         .catch(error => console.error('Error:', error));
+    }
+
+    function editTask(taskId) {
+        const taskItem = document.querySelector(`[data-task-id="${taskId}"]`);
+        if (!taskItem) return;
+        
+        // Get current task content
+        const label = taskItem.querySelector(`label[data-task-content="${taskId}"]`);
+        const currentContent = label ? label.textContent.trim() : '';
+        
+        // Check if already in edit mode
+        const existingForm = taskItem.querySelector('.task-edit-form');
+        if (existingForm) {
+            // Cancel edit mode
+            cancelEditTask(taskId);
+            return;
+        }
+        
+        // Create edit form
+        const editForm = document.createElement('div');
+        editForm.className = 'task-edit-form mt-2';
+        editForm.innerHTML = `
+            <textarea class="form-control task-edit-content" rows="3" style="resize: vertical;">${escapeHtml(currentContent)}</textarea>
+            <div class="mt-2">
+                <button type="button" class="btn btn-sm btn-success" onclick="saveTask(${taskId})">
+                    <i class="bi bi-check"></i> Save
+                </button>
+                <button type="button" class="btn btn-sm btn-secondary" onclick="cancelEditTask(${taskId})">
+                    <i class="bi bi-x"></i> Cancel
+                </button>
+            </div>
+        `;
+        
+        // Hide the label and insert form
+        if (label) {
+            label.style.display = 'none';
+            label.parentElement.appendChild(editForm);
+        }
+        
+        // Focus the textarea
+        const textarea = editForm.querySelector('.task-edit-content');
+        if (textarea) {
+            textarea.focus();
+            textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+        }
+    }
+
+    function cancelEditTask(taskId) {
+        const taskItem = document.querySelector(`[data-task-id="${taskId}"]`);
+        if (!taskItem) return;
+        
+        const editForm = taskItem.querySelector('.task-edit-form');
+        if (editForm) {
+            editForm.remove();
+        }
+        
+        // Show the label again
+        const label = taskItem.querySelector(`label[data-task-content="${taskId}"]`);
+        if (label) {
+            label.style.display = '';
+        }
+    }
+
+    function saveTask(taskId) {
+        const taskItem = document.querySelector(`[data-task-id="${taskId}"]`);
+        if (!taskItem) return;
+        
+        const editForm = taskItem.querySelector('.task-edit-form');
+        if (!editForm) return;
+        
+        const textarea = editForm.querySelector('.task-edit-content');
+        if (!textarea) return;
+        
+        const newContent = textarea.value.trim();
+        
+        if (!newContent) {
+            alert('Task content cannot be empty');
+            return;
+        }
+        
+        // Get current checkbox state
+        const checkbox = taskItem.querySelector('input[type="checkbox"]');
+        const isCompleted = checkbox ? checkbox.checked : false;
+        
+        // Send update request
+        fetchWithCSRF(`/tasks/${taskId}/update`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                content: newContent,
+                completed: isCompleted
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Task will be updated via Socket.IO event
+                // But we can cancel edit mode immediately for better UX
+                cancelEditTask(taskId);
+            } else {
+                if (data.errors) {
+                    const errorMessages = Object.values(data.errors).flat().join('\n');
+                    alert('Error updating task:\n' + errorMessages);
+                } else {
+                    alert('Error updating task');
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error updating task');
+        });
     }
 
     function deleteTask(taskId) {
@@ -249,6 +382,16 @@
         if (data.action === 'updated') {
             const taskItem = tasksContainer.querySelector(`[data-task-id="${data.id}"]`);
             if (taskItem) {
+                // Cancel edit mode if active
+                const editForm = taskItem.querySelector('.task-edit-form');
+                if (editForm) {
+                    editForm.remove();
+                    const label = taskItem.querySelector(`label[data-task-content="${data.id}"]`);
+                    if (label) {
+                        label.style.display = '';
+                    }
+                }
+                
                 // Replace with updated task
                 const newTaskElement = createTaskElement(data);
                 taskItem.replaceWith(newTaskElement);

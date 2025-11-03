@@ -41,8 +41,8 @@ python -c "import secrets; print(secrets.token_hex(32))"
 # Create database tables
 python -c "from app import create_app, db; app = create_app(); app.app_context().push(); db.create_all()"
 
-# Or run migrations if using Flask-Migrate
-flask db upgrade
+# Run migrations using Flask-Migrate (recommended)
+flask --app run:app db upgrade
 ```
 
 ### 4. Create Admin User (if needed)
@@ -274,7 +274,7 @@ sudo systemctl reload nginx
 ### Database Issues
 - Check database connection string in `.env`
 - Ensure database user has proper permissions
-- Run migrations: `flask db upgrade`
+- Run migrations: `flask --app run:app db upgrade`
 
 ### Permission Issues
 - Ensure app user has write access to database file (if using SQLite)

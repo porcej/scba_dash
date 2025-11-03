@@ -54,22 +54,33 @@ The application will be available at `http://localhost:5000`
 
 ## Database Migrations
 
-If you need to apply database migrations (for example, after pulling new changes that modify the database schema):
+This project uses Flask-Migrate for database schema management. Migrations are automatically initialized.
 
-```bash
-python migrate_db.py
-```
+### Applying Migrations
 
-Or using Flask-Migrate (if migrations are initialized):
+To apply pending migrations:
 ```bash
 flask --app run:app db upgrade
 ```
 
-To create a new migration after modifying models:
+### Creating New Migrations
+
+After modifying models in `app/models/`, create a new migration:
 ```bash
 flask --app run:app db migrate -m "Description of changes"
 flask --app run:app db upgrade
 ```
+
+### Migration Commands
+
+- **View migration history**: `flask --app run:app db history`
+- **View current revision**: `flask --app run:app db current`
+- **Downgrade one revision**: `flask --app run:app db downgrade`
+- **Downgrade to specific revision**: `flask --app run:app db downgrade <revision>`
+
+### Note
+
+The old `migrate_db.py` script is deprecated. Use Flask-Migrate commands instead.
 
 ## Adding Users
 

@@ -8,7 +8,17 @@ app = create_app()
 
 # Initialize database and start background tasks
 with app.app_context():
-    db.create_all()
+    # Run database migrations first
+    try:
+        from flask_migrate import upgrade
+        print("Running database migrations...")
+        upgrade()
+        print("Database migrations completed.")
+    except Exception as e:
+        print(f"Warning: Migration failed ({e}), falling back to db.create_all()")
+        # Fallback to create_all for development or if migrations fail
+        db.create_all()
+    
     from app.tasks import start_background_tasks
     start_background_tasks(app)
 

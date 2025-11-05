@@ -243,6 +243,38 @@ def create_alert():
     return redirect(url_for('main.alerts'))
 
 
+@bp.route('/alerts/<int:alert_id>/edit', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def edit_alert(alert_id):
+    """Edit an existing alert"""
+    alert = Alert.query.get_or_404(alert_id)
+    if alert.created_by != current_user.id:
+        flash('Unauthorized.', 'error')
+        return redirect(url_for('main.alerts'))
+    
+    form = AlertForm(obj=alert)
+    
+    if form.validate_on_submit():
+        alert.message = form.message.data
+        alert.start_time = form.start_time.data
+        alert.end_time = form.end_time.data
+        
+        # Recalculate is_active status
+        if not alert.start_time:
+            alert.start_time = datetime.utcnow()
+            alert.is_active = datetime.utcnow() <= alert.end_time
+        else:
+            alert.is_active = (alert.start_time <= datetime.utcnow() <= alert.end_time)
+        
+        db.session.commit()
+        emit_alert_update(alert.id)
+        flash('Alert updated successfully!', 'success')
+        return redirect(url_for('main.alerts'))
+    
+    return render_template('edit_alert.html', alert=alert, form=form)
+
+
 @bp.route('/alerts/<int:alert_id>/delete', methods=['POST'])
 @login_required
 def delete_alert(alert_id):

@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Alert - SCBA Dashboard{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2><i class="bi bi-pencil"></i> Edit Alert</h2>
+        
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Edit Alert</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+                    <div class="mb-3">
+                        {{ form.message.label(class="form-label") }}
+                        {{ form.message(class="form-control") }}
+                        {% if form.message.errors %}
+                            <div class="text-danger small">
+                                {% for error in form.message.errors %}
+                                    <div>{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        <small class="form-text text-muted">Message to display on the dashboard</small>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            {{ form.start_time.label(class="form-label") }}
+                            {% if alert.start_time %}
+                                <input type="datetime-local" 
+                                       class="form-control" 
+                                       id="{{ form.start_time.id }}" 
+                                       name="{{ form.start_time.name }}" 
+                                       value="{{ alert.start_time.strftime('%Y-%m-%dT%H:%M') }}">
+                            {% else %}
+                                {{ form.start_time(class="form-control", type="datetime-local") }}
+                            {% endif %}
+                            {% if form.start_time.errors %}
+                                <div class="text-danger small">
+                                    {% for error in form.start_time.errors %}
+                                        <div>{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                            <small class="form-text text-muted">Leave empty to start immediately</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            {{ form.end_time.label(class="form-label") }}
+                            {{ form.end_time(class="form-control", type="datetime-local", value=alert.end_time.strftime('%Y-%m-%dT%H:%M')) }}
+                            {% if form.end_time.errors %}
+                                <div class="text-danger small">
+                                    {% for error in form.end_time.errors %}
+                                        <div>{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="alert alert-info">
+                            <strong>Current Status:</strong> 
+                            {% if alert.is_active %}
+                                <span class="badge bg-success">Active</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Inactive</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle"></i> Update Alert
+                        </button>
+                        <a href="{{ url_for('main.alerts') }}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

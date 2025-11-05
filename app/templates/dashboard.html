@@ -378,6 +378,55 @@
         return value || '';
     }
     
+    // Helper function to check if a due date is in current month or earlier
+    function isDueDateInCurrentMonthOrEarlier(dateStr) {
+        if (!dateStr || dateStr === '') return null; // Return null for empty dates (not true/false)
+        
+        // Parse date string in MM/DD/YYYY format
+        const parts = dateStr.split('/');
+        if (parts.length === 3) {
+            const month = parseInt(parts[0], 10);
+            const year = parseInt(parts[2], 10);
+            
+            // Validate parsed values
+            if (isNaN(month) || isNaN(year) || month < 1 || month > 12) {
+                return null; // Invalid date format
+            }
+            
+            // Get current month and year
+            const now = new Date();
+            const currentMonth = now.getMonth() + 1; // JavaScript months are 0-indexed, so add 1
+            const currentYear = now.getFullYear();
+            
+            // Check if date is in current month or earlier
+            if (year < currentYear) {
+                return true; // Past year
+            } else if (year === currentYear && month <= currentMonth) {
+                return true; // Current month or earlier in current year
+            } else {
+                return false; // Next month or later
+            }
+        }
+        
+        // If date format is invalid, return null
+        return null;
+    }
+    
+    // Check if gear item should be included based on nextdue column only
+    function shouldIncludeGearItem(gear) {
+        // Check only the nextdue date field
+        const dueDateSort = getSortValue(gear, 'nextdue.nxtsort') || '';
+        const dueDateResult = isDueDateInCurrentMonthOrEarlier(dueDateSort);
+        
+        // Include if date is in current month or earlier
+        if (dueDateResult === true) {
+            return true;
+        }
+        
+        // Exclude if date is future or invalid/missing
+        return false;
+    }
+    
     // Expose renderGearListTable globally for Socket.IO updates
     window.renderGearListTable = function(gearData) {
         const tbody = document.getElementById('gear-list-table-body');
@@ -396,6 +445,16 @@
         
         if (!gearArray || gearArray.length === 0) {
             tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No gear found</td></tr>';
+            return;
+        }
+        
+        // Filter to include only rows with due dates in current month or earlier
+        gearArray = gearArray.filter(function(gear) {
+            return shouldIncludeGearItem(gear);
+        });
+        
+        if (gearArray.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No gear with due dates in current month or earlier</td></tr>';
             return;
         }
         

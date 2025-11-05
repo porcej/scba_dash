@@ -10,7 +10,7 @@
                 <h3 class="card-title text-center mb-4">
                     <i class="bi bi-box-arrow-in-right"></i> Login
                 </h3>
-                <form method="POST" action="{{ url_for('auth.login') }}">
+                <form method="POST" action="{{ url_for('auth.login') }}" id="loginForm">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                     <div class="mb-3">
                         <label for="username" class="form-label">Username</label>
@@ -19,6 +19,12 @@
                     <div class="mb-3">
                         <label for="password" class="form-label">Password</label>
                         <input type="password" class="form-control" id="password" name="password" required>
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="remember" name="remember" value="on">
+                        <label class="form-check-label" for="remember">
+                            Remember me
+                        </label>
                     </div>
                     <div class="d-grid">
                         <button type="submit" class="btn btn-primary">
@@ -30,5 +36,32 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // Save username to localStorage when "Remember Me" is checked and form is submitted
+    document.addEventListener('DOMContentLoaded', function() {
+        const loginForm = document.getElementById('loginForm');
+        const usernameInput = document.getElementById('username');
+        const rememberCheckbox = document.getElementById('remember');
+        
+        // Load saved username from localStorage
+        const savedUsername = localStorage.getItem('scba_dash_username');
+        if (savedUsername) {
+            usernameInput.value = savedUsername;
+            rememberCheckbox.checked = true;
+        }
+        
+        // Save username when form is submitted with "Remember Me" checked
+        loginForm.addEventListener('submit', function(e) {
+            if (rememberCheckbox.checked) {
+                localStorage.setItem('scba_dash_username', usernameInput.value);
+            } else {
+                localStorage.removeItem('scba_dash_username');
+            }
+        });
+    });
+</script>
 {% endblock %}
 

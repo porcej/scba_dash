@@ -25,7 +25,9 @@ def login():
         user = User.query.filter_by(username=username).first()
         
         if user and user.check_password(password):
-            login_user(user)
+            # Check if "Remember Me" was checked
+            remember = request.form.get('remember') == 'on'
+            login_user(user, remember=remember)
             flash('Login successful!', 'success')
             next_page = request.args.get('next')
             return redirect(next_page) if next_page else redirect(url_for('main.dashboard'))

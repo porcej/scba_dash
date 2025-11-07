@@ -227,12 +227,15 @@ def create_alert():
             is_active=False,  # Will be activated by background task
             created_by=current_user.id
         )
+        # Normalize activation against current local time
+        now = datetime.now()
+
         # If no start_time, activate immediately
         if not alert.start_time:
-            alert.start_time = datetime.utcnow()
-            alert.is_active = datetime.utcnow() <= alert.end_time
+            alert.start_time = now
+            alert.is_active = now <= alert.end_time
         else:
-            alert.is_active = (alert.start_time <= datetime.utcnow() <= alert.end_time)
+            alert.is_active = (alert.start_time <= now <= alert.end_time)
         
         db.session.add(alert)
         db.session.commit()
@@ -257,12 +260,14 @@ def edit_alert(alert_id):
         alert.start_time = form.start_time.data
         alert.end_time = form.end_time.data
         
+        now = datetime.now()
+
         # Recalculate is_active status
         if not alert.start_time:
-            alert.start_time = datetime.utcnow()
-            alert.is_active = datetime.utcnow() <= alert.end_time
+            alert.start_time = now
+            alert.is_active = now <= alert.end_time
         else:
-            alert.is_active = (alert.start_time <= datetime.utcnow() <= alert.end_time)
+            alert.is_active = (alert.start_time <= now <= alert.end_time)
         
         db.session.commit()
         emit_alert_update(alert.id)

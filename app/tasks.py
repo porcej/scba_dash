@@ -21,7 +21,7 @@ def check_alerts():
         return
     try:
         with _app.app_context():
-            now = datetime.utcnow()
+            now = datetime.now()
             
             # Get all alerts
             alerts = Alert.query.all()

@@ -208,9 +208,9 @@ def delete_task(task_id):
 @login_required
 def alerts():
     """Alert management page"""
-    user_alerts = Alert.query.filter_by(created_by=current_user.id).order_by(Alert.created_at.desc()).all()
+    alerts = Alert.query.order_by(Alert.created_at.desc()).all()
     form = AlertForm()
-    return render_template('alerts.html', alerts=user_alerts, form=form)
+    return render_template('alerts.html', alerts=alerts, form=form)
 
 
 @bp.route('/alerts/create', methods=['POST'])
@@ -249,9 +249,6 @@ def create_alert():
 def edit_alert(alert_id):
     """Edit an existing alert"""
     alert = Alert.query.get_or_404(alert_id)
-    if alert.created_by != current_user.id:
-        flash('Unauthorized.', 'error')
-        return redirect(url_for('main.alerts'))
     
     form = AlertForm(obj=alert)
     
@@ -277,12 +274,10 @@ def edit_alert(alert_id):
 
 @bp.route('/alerts/<int:alert_id>/delete', methods=['POST'])
 @login_required
+@admin_required
 def delete_alert(alert_id):
     """Delete an alert"""
     alert = Alert.query.get_or_404(alert_id)
-    if alert.created_by != current_user.id:
-        flash('Unauthorized.', 'error')
-        return redirect(url_for('main.alerts'))
     
     db.session.delete(alert)
     db.session.commit()

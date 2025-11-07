@@ -62,7 +62,7 @@
 
         <div class="card">
             <div class="card-header">
-                <h5 class="mb-0">Your Alerts ({{ alerts|length }})</h5>
+                <h5 class="mb-0">All Alerts ({{ alerts|length }})</h5>
             </div>
             <div class="card-body">
                 {% if alerts %}
@@ -71,6 +71,7 @@
                         <thead>
                             <tr>
                                 <th>Message</th>
+                                <th>Created By</th>
                                 <th>Start Time</th>
                                 <th>End Time</th>
                                 <th>Status</th>
@@ -81,6 +82,13 @@
                             {% for alert in alerts %}
                             <tr>
                                 <td>{{ alert.message }}</td>
+                                <td>
+                                    {% if alert.creator %}
+                                        {{ alert.creator.username }}
+                                    {% else %}
+                                        <span class="text-muted">Unknown</span>
+                                    {% endif %}
+                                </td>
                                 <td>
                                     {% if alert.start_time %}
                                         {{ alert.start_time.strftime('%Y-%m-%d %H:%M') }}
@@ -97,20 +105,22 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    {% if current_user.is_admin and alert.created_by == current_user.id %}
-                                    <a href="{{ url_for('main.edit_alert', alert_id=alert.id) }}" 
-                                       class="btn btn-sm btn-outline-primary me-1">
-                                        <i class="bi bi-pencil"></i>
-                                    </a>
+                                    {% if current_user.is_admin %}
+                                        <a href="{{ url_for('main.edit_alert', alert_id=alert.id) }}" 
+                                           class="btn btn-sm btn-outline-primary me-1">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                        <form method="POST" action="{{ url_for('main.delete_alert', alert_id=alert.id) }}" 
+                                              style="display: inline;" 
+                                              onsubmit="return confirm('Are you sure you want to delete this alert?');">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+                                    {% else %}
+                                        <span class="text-muted">No actions available</span>
                                     {% endif %}
-                                    <form method="POST" action="{{ url_for('main.delete_alert', alert_id=alert.id) }}" 
-                                          style="display: inline;" 
-                                          onsubmit="return confirm('Are you sure you want to delete this alert?');">
-                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                                        <button type="submit" class="btn btn-sm btn-outline-danger">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
-                                    </form>
                                 </td>
                             </tr>
                             {% endfor %}

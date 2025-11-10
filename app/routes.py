@@ -210,6 +210,8 @@ def alerts():
     """Alert management page"""
     alerts = Alert.query.order_by(Alert.created_at.desc()).all()
     form = AlertForm()
+    if not form.color_theme.data:
+        form.color_theme.data = 'danger'
     return render_template('alerts.html', alerts=alerts, form=form)
 
 
@@ -225,7 +227,8 @@ def create_alert():
             start_time=form.start_time.data,
             end_time=form.end_time.data,
             is_active=False,  # Will be activated by background task
-            created_by=current_user.id
+            created_by=current_user.id,
+            color_theme=form.color_theme.data or 'danger'
         )
         # Normalize activation against current local time
         now = datetime.now()
@@ -254,11 +257,14 @@ def edit_alert(alert_id):
     alert = Alert.query.get_or_404(alert_id)
     
     form = AlertForm(obj=alert)
+    if request.method == 'GET' and not form.color_theme.data:
+        form.color_theme.data = alert.color_theme or 'danger'
     
     if form.validate_on_submit():
         alert.message = form.message.data
         alert.start_time = form.start_time.data
         alert.end_time = form.end_time.data
+        alert.color_theme = form.color_theme.data or 'danger'
         
         now = datetime.now()
 

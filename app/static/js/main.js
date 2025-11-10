@@ -119,11 +119,33 @@ if (document.readyState === 'loading') {
 function updateAlertBanner(alertData) {
     const alertBanner = document.getElementById('alert-banner');
     const alertMessage = document.getElementById('alert-message');
+    const alertBannerInner = document.getElementById('alert-banner-inner');
+    const alertBannerIcon = document.getElementById('alert-banner-icon');
     
-    if (!alertBanner || !alertMessage) return;
+    if (!alertBanner || !alertMessage || !alertBannerInner) return;
     
     if (alertData && alertData.is_active && alertData.message) {
         alertMessage.textContent = alertData.message;
+        const allowedThemes = ['primary', 'secondary', 'success', 'danger', 'warning', 'info', 'dark', 'light'];
+        const selectedTheme = (alertData.color_theme || 'danger').toLowerCase();
+        const normalizedTheme = allowedThemes.includes(selectedTheme) ? selectedTheme : 'danger';
+        alertBannerInner.className = `alert alert-${normalizedTheme} alert-dismissible fade show mb-0`;
+
+        if (alertBannerIcon) {
+            const iconClasses = {
+                danger: 'bi-exclamation-octagon-fill',
+                warning: 'bi-exclamation-triangle-fill',
+                success: 'bi-check-circle-fill',
+                info: 'bi-info-circle-fill',
+                primary: 'bi-info-circle-fill',
+                secondary: 'bi-info-circle-fill',
+                dark: 'bi-info-circle-fill',
+                light: 'bi-info-circle-fill'
+            };
+            const iconClass = iconClasses[normalizedTheme] || 'bi-info-circle-fill';
+            alertBannerIcon.className = `bi ${iconClass}`;
+        }
+
         alertBanner.classList.remove('d-none');
         document.body.classList.add('alert-active');
     } else {

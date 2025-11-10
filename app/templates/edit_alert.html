@@ -60,6 +60,18 @@
                         </div>
                     </div>
                     <div class="mb-3">
+                        {{ form.color_theme.label(class="form-label") }}
+                        {{ form.color_theme(class="form-select") }}
+                        {% if form.color_theme.errors %}
+                            <div class="text-danger small">
+                                {% for error in form.color_theme.errors %}
+                                    <div>{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        <small class="form-text text-muted">Select the Bootstrap color theme for how this alert will display.</small>
+                    </div>
+                    <div class="mb-3">
                         <div class="alert alert-info">
                             <strong>Current Status:</strong> 
                             {% if alert.is_active %}

@@ -11,6 +11,7 @@ class Alert(db.Model):
     is_active = db.Column(db.Boolean, default=False)
     created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    color_theme = db.Column(db.String(20), nullable=False, default='danger')
     
     def to_dict(self):
         """Convert alert to dictionary for JSON serialization"""
@@ -21,7 +22,8 @@ class Alert(db.Model):
             'end_time': self.end_time.isoformat() if self.end_time else None,
             'is_active': self.is_active,
             'created_by': self.created_by,
-            'created_at': self.created_at.isoformat() if self.created_at else None
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'color_theme': (self.color_theme or 'danger')
         }
     
     def __repr__(self):

@@ -110,10 +110,14 @@
 
     <!-- Alert Banner (fixed at bottom) -->
     <div id="alert-banner" class="alert-banner d-none">
-        <div class="alert alert-info alert-dismissible fade show mb-0" role="alert">
-            <div class="container-fluid">
-                <strong><i class="bi bi-info-circle"></i> Alert:</strong> <span id="alert-message"></span>
-                <button type="button" class="btn-close" data-bs-dismiss="alert" id="dismiss-alert-btn"></button>
+        <div id="alert-banner-inner" class="alert alert-danger alert-dismissible fade show mb-0" role="alert">
+            <div class="container-fluid d-flex align-items-center gap-2">
+                <strong class="d-flex align-items-center gap-2">
+                    <i id="alert-banner-icon" class="bi bi-exclamation-triangle-fill"></i>
+                    Alert:
+                </strong>
+                <span id="alert-message" class="flex-grow-1"></span>
+                <button type="button" class="btn-close ms-2" data-bs-dismiss="alert" id="dismiss-alert-btn"></button>
             </div>
         </div>
     </div>

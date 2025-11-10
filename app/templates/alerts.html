@@ -52,6 +52,18 @@
                             {% endif %}
                         </div>
                     </div>
+                    <div class="mb-3">
+                        {{ form.color_theme.label(class="form-label") }}
+                        {{ form.color_theme(class="form-select") }}
+                        {% if form.color_theme.errors %}
+                            <div class="text-danger small">
+                                {% for error in form.color_theme.errors %}
+                                    <div>{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        <small class="form-text text-muted">Select the Bootstrap color theme for how this alert will display.</small>
+                    </div>
                     <button type="submit" class="btn btn-primary">
                         <i class="bi bi-plus-circle"></i> Create Alert
                     </button>
@@ -71,6 +83,7 @@
                         <thead>
                             <tr>
                                 <th>Message</th>
+                                <th>Color</th>
                                 <th>Created By</th>
                                 <th>Start Time</th>
                                 <th>End Time</th>
@@ -82,6 +95,11 @@
                             {% for alert in alerts %}
                             <tr>
                                 <td>{{ alert.message }}</td>
+                                <td>
+                                    {% set color = (alert.color_theme or 'danger')|lower %}
+                                    {% set text_class = 'text-dark' if color in ['warning', 'light'] else '' %}
+                                    <span class="badge bg-{{ color }} {{ text_class }}">{{ color|capitalize }}</span>
+                                </td>
                                 <td>
                                     {% if alert.creator %}
                                         {{ alert.creator.username }}

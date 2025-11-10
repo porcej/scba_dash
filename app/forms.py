@@ -3,6 +3,17 @@ from wtforms import StringField, TextAreaField, BooleanField, DateTimeField, Pas
 from wtforms.validators import DataRequired, Optional, Length
 from wtforms.widgets import TextArea
 
+ALERT_COLOR_CHOICES = [
+    ('primary', 'Primary'),
+    ('secondary', 'Secondary'),
+    ('success', 'Success'),
+    ('danger', 'Danger'),
+    ('warning', 'Warning'),
+    ('info', 'Info'),
+    ('dark', 'Dark'),
+    ('light', 'Light')
+]
+
 
 class TaskForm(FlaskForm):
     """Form for creating/editing tasks"""
@@ -23,6 +34,7 @@ class AlertForm(FlaskForm):
                               format='%Y-%m-%dT%H:%M')
     end_time = DateTimeField('End Time', validators=[DataRequired()], 
                             format='%Y-%m-%dT%H:%M')
+    color_theme = SelectField('Color Theme', choices=ALERT_COLOR_CHOICES, default='danger', validators=[DataRequired()])
 
 
 class ScrapeConfigForm(FlaskForm):

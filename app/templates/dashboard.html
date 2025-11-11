@@ -1,5 +1,48 @@
 {% extends "base.html" %}
 
+{% block extra_head %}
+{{ super() }}
+<style>
+    body.dashboard-page {
+        --dashboard-navbar-height: 64px;
+    }
+
+    body.dashboard-page .navbar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        transform: translateY(-100%);
+        transition: transform 0.3s ease-in-out;
+        z-index: 1050;
+    }
+
+    body.dashboard-page.navbar-visible .navbar {
+        transform: translateY(0);
+    }
+
+    body.dashboard-page main.container-fluid {
+        margin-top: 0 !important;
+        padding-top: calc(var(--dashboard-navbar-height) + 1rem);
+    }
+
+    body.dashboard-page #alert-banner {
+        bottom: 1.5rem;
+    }
+
+    @media (max-width: 991.98px), (pointer: coarse) {
+        body.dashboard-page .navbar {
+            position: sticky;
+            transform: translateY(0);
+        }
+
+        body.dashboard-page main.container-fluid {
+            padding-top: 1.5rem;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block title %}Dashboard - SCBA Dashboard{% endblock %}
 
 {% block content %}
@@ -146,6 +189,107 @@
 
 {% block extra_scripts %}
 <script>
+    (function() {
+        const body = document.body;
+        if (!body) return;
+
+        body.classList.add('dashboard-page');
+
+        const nav = document.querySelector('nav.navbar');
+        if (!nav) return;
+
+        const VISIBILITY_CLASS = 'navbar-visible';
+        const TRIGGER_ZONE_PX = 72;
+        let isVisible = false;
+        let autoHideEnabled = true;
+
+        const supportsMatchMedia = typeof window.matchMedia === 'function';
+        const prefersReducedMotion = supportsMatchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+        const pointerCoarseQuery = supportsMatchMedia ? window.matchMedia('(pointer: coarse)') : null;
+
+        const addMediaQueryListener = (mql, handler) => {
+            if (!mql) return;
+            if (typeof mql.addEventListener === 'function') {
+                mql.addEventListener('change', handler);
+            } else if (typeof mql.addListener === 'function') {
+                mql.addListener(handler);
+            }
+        };
+
+        const updateNavbarHeight = () => {
+            const height = nav.offsetHeight || 0;
+            if (height > 0) {
+                body.style.setProperty('--dashboard-navbar-height', height + 'px');
+            }
+        };
+
+        const showNavbar = () => {
+            if (!isVisible) {
+                body.classList.add(VISIBILITY_CLASS);
+                isVisible = true;
+            }
+        };
+
+        const hideNavbar = () => {
+            if (!autoHideEnabled) return;
+            if (body.classList.contains(VISIBILITY_CLASS)) {
+                body.classList.remove(VISIBILITY_CLASS);
+            }
+            isVisible = false;
+        };
+
+        const handleMouseMove = (event) => {
+            if (!autoHideEnabled) return;
+            if (event.clientY <= TRIGGER_ZONE_PX) {
+                showNavbar();
+            } else if (!nav.matches(':hover') && !nav.contains(document.activeElement)) {
+                hideNavbar();
+            }
+        };
+
+        const handleNavMouseLeave = (event) => {
+            if (!autoHideEnabled) return;
+            if (event.clientY > TRIGGER_ZONE_PX && !nav.contains(document.activeElement)) {
+                hideNavbar();
+            }
+        };
+
+        const handleFocusIn = (event) => {
+            if (nav.contains(event.target)) {
+                showNavbar();
+            } else if (autoHideEnabled && !nav.matches(':hover')) {
+                hideNavbar();
+            }
+        };
+
+        const evaluateAutoHide = () => {
+            updateNavbarHeight();
+            const disableAutoHide =
+                window.innerWidth < 992 ||
+                (pointerCoarseQuery ? pointerCoarseQuery.matches : false) ||
+                (prefersReducedMotion ? prefersReducedMotion.matches : false);
+
+            autoHideEnabled = !disableAutoHide;
+
+            if (autoHideEnabled) {
+                body.classList.remove(VISIBILITY_CLASS);
+                isVisible = false;
+            } else {
+                showNavbar();
+            }
+        };
+
+        document.addEventListener('mousemove', handleMouseMove);
+        nav.addEventListener('mouseenter', showNavbar);
+        nav.addEventListener('mouseleave', handleNavMouseLeave);
+        document.addEventListener('focusin', handleFocusIn);
+        window.addEventListener('resize', evaluateAutoHide);
+        addMediaQueryListener(pointerCoarseQuery, evaluateAutoHide);
+        addMediaQueryListener(prefersReducedMotion, evaluateAutoHide);
+
+        evaluateAutoHide();
+    })();
+
     // Initialize alerts data from server
     var initialAlertsData = null;
     {% if scraped_data %}

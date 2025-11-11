@@ -110,7 +110,7 @@
 
     <!-- Alert Banner (fixed at bottom) -->
     <div id="alert-banner" class="alert-banner d-none">
-        <div id="alert-banner-inner" class="alert alert-danger alert-dismissible fade show mb-0" role="alert">
+        <div id="alert-banner-inner" class="alert alert-{{ default_alert_color|default('danger') }} alert-dismissible fade show mb-0" role="alert" style="font-size: {{ alerts_font_size_px|default(16) }}px;">
             <div class="container-fluid d-flex align-items-center gap-2">
                 <strong class="d-flex align-items-center gap-2">
                     <i id="alert-banner-icon" class="bi bi-exclamation-triangle-fill"></i>
@@ -128,6 +128,12 @@
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <!-- Custom JS -->
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script>
+        window.alertDefaults = {
+            color: "{{ default_alert_color|default('danger') }}",
+            fontSizePx: {{ alerts_font_size_px|default(16) }}
+        };
+    </script>
     
     {% block extra_scripts %}{% endblock %}
 </body>

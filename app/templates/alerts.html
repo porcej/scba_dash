@@ -96,7 +96,7 @@
                             <tr>
                                 <td>{{ alert.message }}</td>
                                 <td>
-                                    {% set color = (alert.color_theme or 'danger')|lower %}
+                                    {% set color = (alert.color_theme or default_alert_color)|lower %}
                                     {% set text_class = 'text-dark' if color in ['warning', 'light'] else '' %}
                                     <span class="badge bg-{{ color }} {{ text_class }}">{{ color|capitalize }}</span>
                                 </td>

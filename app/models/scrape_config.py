@@ -13,6 +13,8 @@ class ScrapeConfig(db.Model):
     pstrax_password_encrypted = db.Column(db.Text, nullable=True)
     last_scrape = db.Column(db.DateTime, nullable=True)
     scrape_interval = db.Column(db.Integer, default=15)  # minutes
+    default_alert_color = db.Column(db.String(20), default='danger', nullable=False)
+    alerts_font_size = db.Column(db.Integer, default=16, nullable=False)  # pixels
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     @staticmethod
@@ -51,4 +53,13 @@ class ScrapeConfig(db.Model):
     
     def __repr__(self):
         return f'<ScrapeConfig {self.id}>'
+
+    def get_default_alert_color(self):
+        return (self.default_alert_color or 'danger').lower()
+
+    def get_alert_font_size(self):
+        try:
+            return int(self.alerts_font_size or 16)
+        except (TypeError, ValueError):
+            return 16
 

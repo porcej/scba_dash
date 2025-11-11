@@ -62,6 +62,32 @@
                         {% endif %}
                         <small class="form-text text-muted">Interval in minutes between automatic scrapes (current: {{ config.scrape_interval }} minutes)</small>
                     </div>
+                    <hr class="my-4">
+                    <h5 class="mb-3"><i class="bi bi-bell"></i> Alert Display Settings</h5>
+                    <div class="mb-3">
+                        {{ form.default_alert_color.label(class="form-label") }}
+                        {{ form.default_alert_color(class="form-select", disabled=(not current_user.is_admin)) }}
+                        {% if form.default_alert_color.errors %}
+                            <div class="text-danger small">
+                                {% for error in form.default_alert_color.errors %}
+                                    <div>{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        <small class="form-text text-muted">Select the default color for alerts without an assigned color.</small>
+                    </div>
+                    <div class="mb-3">
+                        {{ form.alerts_font_size.label(class="form-label") }}
+                        {{ form.alerts_font_size(class="form-control", type="number", min="12", max="48", step="1", disabled=(not current_user.is_admin)) }}
+                        {% if form.alerts_font_size.errors %}
+                            <div class="text-danger small">
+                                {% for error in form.alerts_font_size.errors %}
+                                    <div>{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        <small class="form-text text-muted">Set the font size (in pixels) for alerts displayed on the dashboard.</small>
+                    </div>
                     {% if current_user.is_admin %}
                     <button type="submit" class="btn btn-primary">
                         <i class="bi bi-save"></i> Save Settings

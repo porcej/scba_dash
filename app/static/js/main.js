@@ -115,6 +115,19 @@ if (document.readyState === 'loading') {
     initSocketIO();
 }
 
+function getAlertDefaults() {
+    const defaults = window.alertDefaults || {};
+    const fallbackColor = typeof defaults.color === 'string' ? defaults.color.toLowerCase() : 'danger';
+    let fontSize = parseInt(defaults.fontSizePx, 10);
+    if (Number.isNaN(fontSize) || fontSize < 12 || fontSize > 64) {
+        fontSize = 16;
+    }
+    return {
+        color: fallbackColor || 'danger',
+        fontSize
+    };
+}
+
 // Alert Banner Management
 function updateAlertBanner(alertData) {
     const alertBanner = document.getElementById('alert-banner');
@@ -124,12 +137,15 @@ function updateAlertBanner(alertData) {
     
     if (!alertBanner || !alertMessage || !alertBannerInner) return;
     
+    const defaults = getAlertDefaults();
+
     if (alertData && alertData.is_active && alertData.message) {
         alertMessage.textContent = alertData.message;
         const allowedThemes = ['primary', 'secondary', 'success', 'danger', 'warning', 'info', 'dark', 'light'];
-        const selectedTheme = (alertData.color_theme || 'danger').toLowerCase();
-        const normalizedTheme = allowedThemes.includes(selectedTheme) ? selectedTheme : 'danger';
+        const selectedTheme = (alertData.color_theme || defaults.color).toLowerCase();
+        const normalizedTheme = allowedThemes.includes(selectedTheme) ? selectedTheme : defaults.color;
         alertBannerInner.className = `alert alert-${normalizedTheme} alert-dismissible fade show mb-0`;
+        alertBannerInner.style.fontSize = `${defaults.fontSize}px`;
 
         if (alertBannerIcon) {
             const iconClasses = {
@@ -142,7 +158,7 @@ function updateAlertBanner(alertData) {
                 dark: 'bi-info-circle-fill',
                 light: 'bi-info-circle-fill'
             };
-            const iconClass = iconClasses[normalizedTheme] || 'bi-info-circle-fill';
+            const iconClass = iconClasses[normalizedTheme] || iconClasses[defaults.color] || 'bi-info-circle-fill';
             alertBannerIcon.className = `bi ${iconClass}`;
         }
 

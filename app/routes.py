@@ -210,8 +210,10 @@ def alerts():
     """Alert management page"""
     alerts = Alert.query.order_by(Alert.created_at.desc()).all()
     form = AlertForm()
-    if not form.color_theme.data:
-        form.color_theme.data = 'danger'
+    config = ScrapeConfig.query.first()
+    default_color = config.get_default_alert_color() if config else 'danger'
+    # Always apply configured default for new alert form, so admins see the current default pre-selected
+    form.color_theme.data = default_color
     return render_template('alerts.html', alerts=alerts, form=form)
 
 
@@ -221,6 +223,8 @@ def alerts():
 def create_alert():
     """Create a new alert"""
     form = AlertForm()
+    config = ScrapeConfig.query.first()
+    default_color = config.get_default_alert_color() if config else 'danger'
     if form.validate_on_submit():
         alert = Alert(
             message=form.message.data,
@@ -228,7 +232,7 @@ def create_alert():
             end_time=form.end_time.data,
             is_active=False,  # Will be activated by background task
             created_by=current_user.id,
-            color_theme=form.color_theme.data or 'danger'
+            color_theme=(form.color_theme.data or default_color).lower()
         )
         # Normalize activation against current local time
         now = datetime.now()
@@ -257,14 +261,16 @@ def edit_alert(alert_id):
     alert = Alert.query.get_or_404(alert_id)
     
     form = AlertForm(obj=alert)
+    config = ScrapeConfig.query.first()
+    default_color = config.get_default_alert_color() if config else 'danger'
     if request.method == 'GET' and not form.color_theme.data:
-        form.color_theme.data = alert.color_theme or 'danger'
+        form.color_theme.data = alert.color_theme or default_color
     
     if form.validate_on_submit():
         alert.message = form.message.data
         alert.start_time = form.start_time.data
         alert.end_time = form.end_time.data
-        alert.color_theme = form.color_theme.data or 'danger'
+        alert.color_theme = (form.color_theme.data or default_color).lower()
         
         now = datetime.now()
 
@@ -316,6 +322,8 @@ def settings():
     form.pstrax_base_url.data = config.pstrax_base_url
     form.pstrax_username.data = config.pstrax_username
     form.scrape_interval.data = str(config.scrape_interval)
+    form.default_alert_color.data = config.get_default_alert_color()
+    form.alerts_font_size.data = config.get_alert_font_size()
     
     return render_template('settings.html', form=form, config=config)
 
@@ -351,6 +359,11 @@ def update_settings():
             except ValueError:
                 flash('Invalid scrape interval.', 'error')
                 return redirect(url_for('main.settings'))
+        config.default_alert_color = (form.default_alert_color.data or 'danger').lower()
+        if form.alerts_font_size.data:
+            config.alerts_font_size = int(form.alerts_font_size.data)
+        else:
+            config.alerts_font_size = 16
         
         db.session.commit()
         
@@ -362,6 +375,20 @@ def update_settings():
     
     flash('Error updating settings.', 'error')
     return redirect(url_for('main.settings'))
+
+
+@bp.app_context_processor
+def inject_alert_settings():
+    config = ScrapeConfig.query.first()
+    default_color = 'danger'
+    font_size = 16
+    if config:
+        default_color = config.get_default_alert_color()
+        font_size = config.get_alert_font_size()
+    return {
+        'default_alert_color': default_color,
+        'alerts_font_size_px': font_size
+    }
 
 
 @bp.route('/change-password')

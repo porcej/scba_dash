@@ -15,6 +15,14 @@ class Alert(db.Model):
     
     def to_dict(self):
         """Convert alert to dictionary for JSON serialization"""
+        default_color = 'danger'
+        try:
+            from app.models.scrape_config import ScrapeConfig
+            config = ScrapeConfig.query.first()
+            if config:
+                default_color = config.get_default_alert_color()
+        except Exception:
+            pass
         return {
             'id': self.id,
             'message': self.message,
@@ -23,7 +31,7 @@ class Alert(db.Model):
             'is_active': self.is_active,
             'created_by': self.created_by,
             'created_at': self.created_at.isoformat() if self.created_at else None,
-            'color_theme': (self.color_theme or 'danger')
+            'color_theme': (self.color_theme or default_color)
         }
     
     def __repr__(self):

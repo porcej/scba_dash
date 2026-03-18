@@ -5,7 +5,7 @@ from urllib.parse import urlparse, urljoin, quote
 from bs4 import BeautifulSoup
 from datetime import datetime
 from app import db
-from app.models import ScrapeConfig, ScrapeData
+from app.models import ScrapeConfig, ScrapeData, Equipment
 from app.socketio_events import emit_scrape_update
 
 
@@ -234,24 +234,22 @@ class PstraxScraper:
         """
         gear_list_url = f'{base_url.rstrip("/")}/scba/gear-list-data.php'
         
-        # Prepare form data
+        # PSTrax cylinder list (typeid=11); same session cookies as alerts after login
         form_data = {
             'limitSearch': '0',
             'btnSubmit': 'Find',
-            'typeid': '',
+            'typeid': '11',
             'statusid': '',
             'sid': ''
         }
-        
-        # Set headers
         headers = {
-            'Referer': base_url,
-            'Accept': 'application/json, text/html, */*',
-            'Content-Type': 'application/x-www-form-urlencoded'
+            'Referer': base_url.rstrip('/') + '/',
+            'Accept': 'application/json, text/javascript, */*; q=0.01',
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
         }
-        
-        # Send POST request
-        response = self.session.post(gear_list_url, data=form_data, timeout=10, allow_redirects=True, headers=headers)
+        response = self.session.post(
+            gear_list_url, data=form_data, timeout=120, allow_redirects=True, headers=headers
+        )
         
         return response
     
@@ -465,34 +463,25 @@ def perform_scrape():
                 target_url = alerts_link
                 print(f"Using alerts link from login: {target_url}")
         
-        # Get SCBA alerts using the new method
         print("Fetching SCBA alerts...")
         scba_alerts_response = scraper.getSCBAAlerts(base_url=base_url)
-        
-        # Get SCBA gear list
-        print("Fetching SCBA gear list...")
-        gear_list_response = scraper.getGearList(base_url=base_url)
-        
-        # Prepare data structure
+
         data = {
             'scraped_at': datetime.utcnow().isoformat(),
             'url': f'{base_url.rstrip("/")}/scba/scba-open-alerts-data.php',
             'status': 'success' if scba_alerts_response.status_code == 200 else 'error'
         }
-        
-        # Process SCBA alerts
+
         if scba_alerts_response.status_code == 200:
             try:
-                # Try to parse JSON response
                 alerts_data = scba_alerts_response.json()
                 data['data'] = alerts_data
                 print(f"Successfully fetched {len(alerts_data) if isinstance(alerts_data, list) else 'unknown'} alerts")
             except (ValueError, json.JSONDecodeError):
-                # If JSON parsing fails, try parsing response.text directly
                 try:
                     alerts_data = json.loads(scba_alerts_response.text)
                     data['data'] = alerts_data
-                    print(f"Successfully parsed JSON from response.text")
+                    print("Successfully parsed JSON from response.text")
                 except (ValueError, json.JSONDecodeError):
                     data['status'] = 'error'
                     data['error'] = 'Failed to parse JSON response'
@@ -502,26 +491,7 @@ def perform_scrape():
             data['status_code'] = scba_alerts_response.status_code
             if 'login' in scba_alerts_response.url.lower():
                 data['error'] = 'Authentication expired - redirected to login'
-        
-        # Process gear list
-        if gear_list_response.status_code == 200:
-            try:
-                gear_list_data = gear_list_response.json()
-                data['gear_list'] = gear_list_data
-                print(f"Successfully fetched gear list data")
-            except (ValueError, json.JSONDecodeError):
-                # If JSON parsing fails, try parsing response.text directly
-                try:
-                    gear_list_data = json.loads(gear_list_response.text)
-                    data['gear_list'] = gear_list_data
-                    print(f"Successfully parsed gear list JSON from response.text")
-                except (ValueError, json.JSONDecodeError):
-                    print(f"Warning: Failed to parse gear list JSON response")
-                    # Don't fail the whole scrape if gear list fails
-        else:
-            print(f"Warning: Failed to fetch gear list. Status: {gear_list_response.status_code}")
-            # Don't fail the whole scrape if gear list fails
-        
+
         # Store scraped data
         scrape_data = ScrapeData()
         scrape_data.set_data(data)
@@ -531,7 +501,72 @@ def perform_scrape():
         config.last_scrape = datetime.utcnow()
         db.session.commit()
         
-        # Emit update via SocketIO (includes both alerts and gear list)
         emit_scrape_update(data)
-        
         print("Scraping completed successfully")
+
+
+def perform_equipment_scrape():
+    """Fetch PSTrax equipment (cylinders) and replace the equipment table."""
+    from app import db
+
+    with db.session.no_autoflush:
+        config = ScrapeConfig.query.first()
+        if not config or not config.pstrax_username or not config.pstrax_password_encrypted:
+            print("Equipment scrape skipped: No credentials configured")
+            return
+        password = config.get_password()
+        if not password:
+            print("Equipment scrape skipped: Could not decrypt password")
+            return
+
+        base_url = config.pstrax_base_url or 'https://pstrax.com'
+        print(f"Starting equipment scrape at {base_url}")
+
+        scraper = PstraxScraper()
+        login_success, login_result = scraper.login(
+            config.pstrax_username, password, base_url=base_url
+        )
+        if not login_success:
+            print(f"Equipment scrape failed: login unsuccessful — {login_result}")
+            return
+
+        resp = scraper.getGearList(base_url=base_url)
+        if resp.status_code != 200:
+            print(f"Equipment scrape failed: HTTP {resp.status_code}")
+            return
+        if 'login' in (resp.url or '').lower():
+            print("Equipment scrape failed: session redirected to login")
+            return
+
+        try:
+            payload = resp.json()
+        except (ValueError, json.JSONDecodeError):
+            try:
+                payload = json.loads(resp.text)
+            except (ValueError, json.JSONDecodeError) as e:
+                print(f"Equipment scrape failed: invalid JSON ({e})")
+                return
+
+        rows = payload.get('data') if isinstance(payload, dict) else None
+        if not isinstance(rows, list):
+            print("Equipment scrape failed: response missing data array")
+            return
+
+        now = datetime.utcnow()
+        try:
+            Equipment.query.delete(synchronize_session=False)
+            for item in rows:
+                try:
+                    db.session.add(Equipment.from_pstrax_row(item, now))
+                except (ValueError, TypeError, KeyError) as ex:
+                    print(f"Equipment scrape: skip row {item.get('gearid')}: {ex}")
+            config.last_equipment_scrape = now
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            print(f"Equipment scrape failed storing rows: {e}")
+            return
+
+        print(f"Equipment scrape completed: {len(rows)} rows stored")
+        from app.socketio_events import emit_equipment_updated
+        emit_equipment_updated()

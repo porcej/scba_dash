@@ -7,7 +7,8 @@ A Flask-based dashboard application with real-time updates, task management, web
 - **Bootstrap 5 UI** with dark/light theme toggle
 - **Real-time updates** using Flask-SocketIO
 - **Task management** - authenticated users can create, update, and delete tasks
-- **Web scraping** - automatically scrapes data from pstrax website
+- **Web scraping** - automatically scrapes PSTrax **alerts** on a configurable interval (minutes)
+- **Equipment sync** - PSTrax cylinder gear (type 11) is POSTed to `scba/gear-list-data.php`, stored in structured **`equipment`** columns (dates as **mm/dd/yyyy** in `exp_date`, `next_hydro`, `next_flow`, `next_due`; raw HTML displays preserved where needed). The table is **replaced entirely** on each successful run on a separate schedule (default **24 hours**, configurable in Settings)
 - **Scheduled alerts** - display messages at the bottom of the dashboard with start/end times
 - **Settings** - manage pstrax credentials securely
 
@@ -23,11 +24,15 @@ A Flask-based dashboard application with real-time updates, task management, web
 cd scba_dash
 ```
 
-2. Create a virtual environment:
+2. Virtual environment (this project often uses `~/.venv/scba_dash`):
 ```bash
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# Example: shared venv for this app
+python3 -m venv ~/.venv/scba_dash
+source ~/.venv/scba_dash/bin/activate  # On Windows: use that venv’s Scripts\activate
+# Or a local venv: python3 -m venv venv && source venv/bin/activate
 ```
+
+Cursor/VS Code: interpreter is set in `.vscode/settings.json` to `/Users/porcej/.venv/scba_dash/bin/python` when using that layout.
 
 3. Install dependencies:
 ```bash

@@ -1,8 +1,12 @@
 #!/bin/bash
 # Start script for Gunicorn with gevent
 
-# Activate virtual environment if it exists
-if [ -d "venv" ]; then
+# Prefer project venv at ~/.venv/scba_dash, then local ./venv
+if [ -f "${HOME}/.venv/scba_dash/bin/activate" ]; then
+    # shellcheck source=/dev/null
+    source "${HOME}/.venv/scba_dash/bin/activate"
+elif [ -d "venv" ]; then
+    # shellcheck source=/dev/null
     source venv/bin/activate
 fi
 

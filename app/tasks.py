@@ -3,7 +3,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from datetime import datetime
 from app import db
 from app.models import Alert, ScrapeConfig
-from app.scraper import perform_scrape
+from app.scraper import perform_scrape, perform_equipment_scrape
 from app.socketio_events import emit_alert_update
 import atexit
 
@@ -59,6 +59,18 @@ def scheduled_scrape():
         print(f"Error in scheduled scrape: {e}")
 
 
+def scheduled_equipment_scrape():
+    """Background task for PSTrax equipment sync (separate from alerts)."""
+    global _app
+    if not _app:
+        return
+    try:
+        with _app.app_context():
+            perform_equipment_scrape()
+    except Exception as e:
+        print(f"Error in scheduled equipment scrape: {e}")
+
+
 def start_background_tasks(app):
     """Start all background tasks"""
     global _app
@@ -85,7 +97,22 @@ def start_background_tasks(app):
             name='Scheduled scraping',
             replace_existing=True
         )
-        
+
+        hours = 24
+        if config and getattr(config, 'equipment_scrape_interval_hours', None):
+            try:
+                h = int(config.equipment_scrape_interval_hours)
+                hours = h if h >= 1 else 24
+            except (TypeError, ValueError):
+                hours = 24
+        scheduler.add_job(
+            func=scheduled_equipment_scrape,
+            trigger=IntervalTrigger(hours=hours),
+            id='scheduled_equipment_scrape',
+            name='Scheduled equipment scrape',
+            replace_existing=True
+        )
+
         scheduler.start()
         print("Background tasks started")
         
@@ -120,4 +147,34 @@ def update_scrape_schedule():
             )
     except Exception as e:
         print(f"Error updating scrape schedule: {e}")
+
+
+def update_equipment_scrape_schedule():
+    """Reschedule equipment sync when interval changes."""
+    global _app
+    if not _app:
+        return
+    try:
+        with _app.app_context():
+            config = ScrapeConfig.query.first()
+            hours = 24
+            if config and getattr(config, 'equipment_scrape_interval_hours', None):
+                try:
+                    h = int(config.equipment_scrape_interval_hours)
+                    hours = h if h >= 1 else 24
+                except (TypeError, ValueError):
+                    hours = 24
+            try:
+                scheduler.remove_job('scheduled_equipment_scrape')
+            except Exception:
+                pass
+            scheduler.add_job(
+                func=scheduled_equipment_scrape,
+                trigger=IntervalTrigger(hours=hours),
+                id='scheduled_equipment_scrape',
+                name='Scheduled equipment scrape',
+                replace_existing=True
+            )
+    except Exception as e:
+        print(f"Error updating equipment scrape schedule: {e}")
 

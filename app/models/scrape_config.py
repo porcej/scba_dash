@@ -12,7 +12,9 @@ class ScrapeConfig(db.Model):
     pstrax_username = db.Column(db.String(255), nullable=True)
     pstrax_password_encrypted = db.Column(db.Text, nullable=True)
     last_scrape = db.Column(db.DateTime, nullable=True)
-    scrape_interval = db.Column(db.Integer, default=15)  # minutes
+    scrape_interval = db.Column(db.Integer, default=15)  # minutes (alerts scraper)
+    equipment_scrape_interval_hours = db.Column(db.Integer, default=24, nullable=False)
+    last_equipment_scrape = db.Column(db.DateTime, nullable=True)
     default_alert_color = db.Column(db.String(20), default='danger', nullable=False)
     alerts_font_size = db.Column(db.Integer, default=16, nullable=False)  # pixels
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

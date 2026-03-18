@@ -39,6 +39,11 @@ def emit_scrape_update(data=None):
     socketio.emit('scrape_update', data or {'action': 'refresh'}, namespace='/')
 
 
+def emit_equipment_updated():
+    """Notify clients that the equipment table was refreshed."""
+    socketio.emit('equipment_updated', {}, namespace='/')
+
+
 def emit_alert_update(alert_id=None):
     """Emit alert update event to all clients"""
     if alert_id:

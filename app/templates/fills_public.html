@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>SCBA Cylinder Fills</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/theme.css') }}" rel="stylesheet">
+
+    <style>
+        :root {
+            --fills-font: 20px;
+            --fills-font-sm: 16px;
+        }
+        body { font-size: var(--fills-font); }
+        .screen {
+            max-width: 980px;
+            margin: 0 auto;
+            padding: 14px 14px 28px;
+        }
+        .kbd-input {
+            font-size: 44px;
+            line-height: 1.2;
+            height: 78px;
+            letter-spacing: 0.12em;
+            text-align: center;
+        }
+        .btn-xl {
+            font-size: 22px;
+            padding: 14px 18px;
+        }
+        .help { font-size: var(--fills-font-sm); }
+        .table thead th { position: sticky; top: 0; background: var(--bs-body-bg); z-index: 2; }
+        .row-overdue { background: rgba(220, 53, 69, 0.18) !important; }     /* red */
+        .row-warning { background: rgba(255, 193, 7, 0.22) !important; }   /* yellow */
+        .badge-id { font-size: 18px; }
+        .selected-pill { font-size: 18px; }
+        .touch-check { transform: scale(1.6); transform-origin: left center; }
+    </style>
+</head>
+<body>
+    <script>
+        (function () {
+            var t = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', t);
+        })();
+    </script>
+    <div class="screen">
+        <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-droplet-fill"></i>
+                <strong>SCBA Cylinder Fill Log</strong>
+            </div>
+            <button type="button" class="btn btn-outline-secondary btn-lg" id="themeToggle" aria-label="Toggle light or dark mode">
+                <i class="bi bi-moon-stars" id="themeIcon"></i>
+                <span id="themeLabel">Dark</span>
+            </button>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="d-flex align-items-start gap-3">
+                    <div class="flex-grow-1">
+                        <div class="mb-2"><strong>Before filling, confirm:</strong></div>
+                        <ol class="mb-0 help">
+                            <li><strong>Enter Cylinder #</strong> (4 digits)</li>
+                            <li><strong>Cylinder is undamaged</strong></li>
+                            <li><strong>Last hydro is less than 5 years</strong></li>
+                        </ol>
+                        <div class="mt-2 help text-muted">
+                            If the cylinder is damaged or hydro is out of date, <strong>remove from service</strong>.
+                        </div>
+                    </div>
+                    <div class="text-end help text-muted">
+                        <div><strong>Hydro highlighting</strong></div>
+                        <div><span class="badge bg-danger">Red</span> overdue</div>
+                        <div><span class="badge bg-warning text-dark">Yellow</span> due ≤ 6 months</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="row g-3 align-items-end">
+                    <div class="col-12 col-md-6">
+                        <label class="form-label mb-1"><strong>Cylinder #</strong> (internal ID)</label>
+                        <input id="cylInput" class="form-control kbd-input" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="0000" autocomplete="off">
+                        <div class="help text-muted mt-1">Typing filters the table by cylinder #; enter <strong>4 digits</strong> and press <strong>Enter</strong> to add to selection.</div>
+                    </div>
+                    <div class="col-12 col-md-6 d-grid gap-2">
+                        <button class="btn btn-primary btn-xl" id="btnLog" disabled>
+                            <i class="bi bi-check2-circle"></i> Log Fill for Selected
+                        </button>
+                        <button class="btn btn-outline-secondary btn-xl" id="btnClear" disabled>
+                            <i class="bi bi-x-circle"></i> Clear Selection
+                        </button>
+                    </div>
+                </div>
+
+                <hr class="my-3">
+
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <div><strong>Selected cylinders</strong></div>
+                    <div class="text-muted help"><span id="selectedCount">0</span> selected</div>
+                </div>
+                <div id="selectedPills" class="d-flex flex-wrap gap-2"></div>
+
+                <div id="statusMsg" class="mt-3"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <strong>Available cylinders</strong>
+                <div class="help text-muted">Tap rows or checkboxes to select</div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 55vh;">
+                    <table class="table table-hover table-striped mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width: 64px;"></th>
+                                <th>Cylinder #</th>
+                                <th>Serial</th>
+                                <th>Hydro Due</th>
+                                <th>Status</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cylTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const CYLINDERS = {{ cylinders_json|safe }};
+
+        function getCSRFToken() {
+            const metaTag = document.querySelector('meta[name="csrf-token"]');
+            return metaTag ? metaTag.getAttribute('content') : '';
+        }
+
+        function parseMDY(mdy) {
+            if (!mdy) return null;
+            const parts = String(mdy).trim().split('/');
+            if (parts.length !== 3) return null;
+            const mm = parseInt(parts[0], 10);
+            const dd = parseInt(parts[1], 10);
+            const yy = parseInt(parts[2], 10);
+            if (!mm || !dd || !yy) return null;
+            const d = new Date(yy, mm - 1, dd);
+            return isNaN(d.getTime()) ? null : d;
+        }
+
+        function addMonths(d, months) {
+            const x = new Date(d.getTime());
+            x.setMonth(x.getMonth() + months);
+            return x;
+        }
+
+        const selected = new Map(); // internalid -> row
+
+        function hydroClass(nextHydroMdy) {
+            const d = parseMDY(nextHydroMdy);
+            if (!d) return '';
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            const sixMo = addMonths(today, 6);
+            if (d < today) return 'row-overdue';
+            if (d <= sixMo) return 'row-warning';
+            return '';
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('cylTableBody');
+            tbody.innerHTML = '';
+            for (const c of CYLINDERS) {
+                const tr = document.createElement('tr');
+                tr.dataset.internalid = c.internalid;
+                const cls = hydroClass(c.next_hydro);
+                if (cls) tr.classList.add(cls);
+
+                const checked = selected.has(c.internalid);
+                tr.innerHTML = `
+                    <td class="text-center align-middle">
+                        <input class="form-check-input touch-check" type="checkbox" ${checked ? 'checked' : ''} aria-label="select cylinder ${c.internalid}">
+                    </td>
+                    <td class="align-middle"><span class="badge text-bg-secondary badge-id">${c.internalid}</span></td>
+                    <td class="align-middle">${escapeHtml(c.serial || '')}</td>
+                    <td class="align-middle">${escapeHtml(c.next_hydro || '')}</td>
+                    <td class="align-middle">${escapeHtml(c.status || '')}</td>
+                    <td class="align-middle">${escapeHtml(c.description || '')}</td>
+                `;
+
+                tr.addEventListener('click', (e) => {
+                    // allow checkbox click to work without double toggles
+                    if (e.target && e.target.tagName === 'INPUT') return;
+                    toggleSelect(c.internalid);
+                });
+                tr.querySelector('input').addEventListener('change', () => toggleSelect(c.internalid));
+                tbody.appendChild(tr);
+            }
+            renderSelected();
+            applyTableFilter();
+        }
+
+        function getCylinderFilterDigits() {
+            const inp = document.getElementById('cylInput');
+            return (inp && inp.value ? inp.value : '').replace(/\D/g, '').slice(0, 4);
+        }
+
+        function applyTableFilter() {
+            const q = getCylinderFilterDigits();
+            document.querySelectorAll('#cylTableBody tr[data-internalid]').forEach((tr) => {
+                const id = String(tr.dataset.internalid || '');
+                const show = !q || id.startsWith(q);
+                tr.classList.toggle('d-none', !show);
+            });
+        }
+
+        function escapeHtml(s) {
+            return String(s).replace(/[&<>"']/g, (c) => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+            }[c]));
+        }
+
+        function toggleSelect(internalid) {
+            const id = String(internalid).trim();
+            const row = CYLINDERS.find(x => x.internalid === id);
+            if (!row) {
+                flash(`Cylinder #${id} not found`, 'warning');
+                return;
+            }
+            if (selected.has(id)) selected.delete(id);
+            else selected.set(id, row);
+            syncTableChecks();
+            renderSelected();
+        }
+
+        function syncTableChecks() {
+            document.querySelectorAll('tr[data-internalid]').forEach(tr => {
+                const id = tr.dataset.internalid;
+                const cb = tr.querySelector('input[type="checkbox"]');
+                if (cb) cb.checked = selected.has(id);
+            });
+        }
+
+        function renderSelected() {
+            const pills = document.getElementById('selectedPills');
+            pills.innerHTML = '';
+            const ids = Array.from(selected.keys()).sort();
+            for (const id of ids) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'btn btn-outline-primary selected-pill';
+                btn.innerHTML = `<i class="bi bi-dash-circle"></i> ${escapeHtml(id)}`;
+                btn.addEventListener('click', () => {
+                    selected.delete(id);
+                    syncTableChecks();
+                    renderSelected();
+                });
+                pills.appendChild(btn);
+            }
+            document.getElementById('selectedCount').textContent = String(ids.length);
+            document.getElementById('btnLog').disabled = ids.length === 0;
+            document.getElementById('btnClear').disabled = ids.length === 0;
+        }
+
+        function flash(msg, type) {
+            const el = document.getElementById('statusMsg');
+            el.innerHTML = `<div class="alert alert-${type} mb-0" role="alert">${escapeHtml(msg)}</div>`;
+            setTimeout(() => { el.innerHTML = ''; }, 5000);
+        }
+
+        function addFromInput() {
+            const inp = document.getElementById('cylInput');
+            const raw = (inp.value || '').replace(/\D/g, '').slice(0, 4);
+            inp.value = raw;
+            if (raw.length !== 4) {
+                flash('Enter a 4 digit Cylinder #', 'warning');
+                return;
+            }
+            toggleSelect(raw);
+            inp.value = '';
+            applyTableFilter();
+            inp.focus();
+        }
+
+        async function logFills() {
+            const ids = Array.from(selected.keys());
+            if (ids.length === 0) return;
+
+            const btn = document.getElementById('btnLog');
+            btn.disabled = true;
+            try {
+                const resp = await fetch('/api/fills/log', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCSRFToken()
+                    },
+                    body: JSON.stringify({ internalids: ids })
+                });
+                const data = await resp.json();
+                if (!resp.ok || !data.success) {
+                    flash(data.error || 'Failed to log fills', 'danger');
+                    btn.disabled = false;
+                    return;
+                }
+                flash(`Logged ${data.created} fill(s).`, 'success');
+                selected.clear();
+                syncTableChecks();
+                renderSelected();
+            } catch (e) {
+                flash('Network error logging fills', 'danger');
+                btn.disabled = false;
+            }
+        }
+
+        function syncThemeButton() {
+            const theme = document.documentElement.getAttribute('data-theme') || 'light';
+            const label = document.getElementById('themeLabel');
+            const icon = document.getElementById('themeIcon');
+            if (label && icon) {
+                if (theme === 'dark') {
+                    label.textContent = 'Light';
+                    icon.className = 'bi bi-sun-fill';
+                } else {
+                    label.textContent = 'Dark';
+                    icon.className = 'bi bi-moon-stars';
+                }
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            syncThemeButton();
+            document.getElementById('themeToggle').addEventListener('click', () => {
+                const cur = document.documentElement.getAttribute('data-theme') || 'light';
+                const next = cur === 'dark' ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-theme', next);
+                localStorage.setItem('theme', next);
+                syncThemeButton();
+            });
+
+            renderTable();
+            const inp = document.getElementById('cylInput');
+            inp.addEventListener('input', () => {
+                inp.value = (inp.value || '').replace(/\D/g, '').slice(0, 4);
+                applyTableFilter();
+            });
+            inp.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addFromInput();
+                }
+            });
+            document.getElementById('btnLog').addEventListener('click', logFills);
+            document.getElementById('btnClear').addEventListener('click', () => {
+                selected.clear();
+                syncTableChecks();
+                renderSelected();
+            });
+        });
+    </script>
+</body>
+</html>
+

@@ -1,15 +1,17 @@
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash
 from flask_login import login_required, current_user
 from app import db, socketio
-from app.models import Task, Alert, ScrapeData, ScrapeConfig, User
+from app.models import Task, Alert, ScrapeData, ScrapeConfig, User, Equipment, CylinderFillLog
 from app.forms import TaskForm, AlertForm, ScrapeConfigForm, PasswordChangeForm
 from app.user_forms import UserForm
 from app.admin import admin_required
 from app.socketio_events import emit_task_update, emit_alert_update, emit_scrape_update
-from app.tasks import update_scrape_schedule
+from app.tasks import update_scrape_schedule, update_equipment_scrape_schedule
 from app.scraper import perform_scrape as run_scrape
+from app.scraper import perform_equipment_scrape as run_equipment_scrape
 from datetime import datetime
 import json
+import uuid
 
 bp = Blueprint('main', __name__)
 
@@ -322,6 +324,9 @@ def settings():
     form.pstrax_base_url.data = config.pstrax_base_url
     form.pstrax_username.data = config.pstrax_username
     form.scrape_interval.data = str(config.scrape_interval)
+    form.equipment_scrape_interval_hours.data = str(
+        getattr(config, 'equipment_scrape_interval_hours', None) or 24
+    )
     form.default_alert_color.data = config.get_default_alert_color()
     form.alerts_font_size.data = config.get_alert_font_size()
     
@@ -359,6 +364,15 @@ def update_settings():
             except ValueError:
                 flash('Invalid scrape interval.', 'error')
                 return redirect(url_for('main.settings'))
+        if form.equipment_scrape_interval_hours.data:
+            try:
+                h = int(form.equipment_scrape_interval_hours.data)
+                if h < 1:
+                    raise ValueError('min 1')
+                config.equipment_scrape_interval_hours = h
+            except ValueError:
+                flash('Invalid equipment sync interval (use whole hours, minimum 1).', 'error')
+                return redirect(url_for('main.settings'))
         config.default_alert_color = (form.default_alert_color.data or 'danger').lower()
         if form.alerts_font_size.data:
             config.alerts_font_size = int(form.alerts_font_size.data)
@@ -367,8 +381,8 @@ def update_settings():
         
         db.session.commit()
         
-        # Update scraping schedule if interval changed
         update_scrape_schedule()
+        update_equipment_scrape_schedule()
         
         flash('Settings updated successfully!', 'success')
         return redirect(url_for('main.settings'))
@@ -429,6 +443,69 @@ def update_password():
     return redirect(url_for('main.change_password'))
 
 
+@bp.route('/fills')
+def public_fills():
+    """Public iPad-friendly page to log SCBA cylinder fills."""
+    cylinders = (
+        Equipment.query.filter(Equipment.geartypeid == 11)
+        .order_by(Equipment.internalid.asc())
+        .all()
+    )
+    # Keep payload small (table is ~hundreds of rows). Send only what UI needs.
+    data = [
+        {
+            "gearid": c.gearid,
+            "internalid": (c.internalid or "").strip(),
+            "serial": c.serial or "",
+            "status": c.status or "",
+            "description": c.description or "",
+            "next_hydro": c.next_hydro or "",
+        }
+        for c in cylinders
+        if c.internalid
+    ]
+    return render_template('fills_public.html', cylinders_json=json.dumps(data))
+
+
+@bp.route('/api/fills/log', methods=['POST'])
+def public_log_fills():
+    """Public endpoint: create fill log rows for selected cylinders."""
+    payload = request.get_json(silent=True) or {}
+    internalids = payload.get("internalids") or []
+    if not isinstance(internalids, list):
+        return jsonify({"success": False, "error": "internalids must be a list"}), 400
+
+    internalids = [str(x).strip() for x in internalids if str(x).strip()]
+    if not internalids:
+        return jsonify({"success": False, "error": "No cylinders provided"}), 400
+
+    batch_id = str(uuid.uuid4())
+    now = datetime.utcnow()
+
+    # Resolve internalid -> equipment
+    equipment_rows = (
+        Equipment.query.filter(Equipment.internalid.in_(internalids)).all()
+    )
+    by_internal = {str(e.internalid).strip(): e for e in equipment_rows if e.internalid}
+
+    created = 0
+    for iid in internalids:
+        eq = by_internal.get(iid)
+        db.session.add(
+            CylinderFillLog(
+                batch_id=batch_id,
+                gearid=eq.gearid if eq else None,
+                internalid=iid,
+                filled_at=now,
+                created_at=now,
+            )
+        )
+        created += 1
+
+    db.session.commit()
+    return jsonify({"success": True, "batch_id": batch_id, "created": created, "filled_at": now.isoformat()})
+
+
 # API Routes
 @bp.route('/api/alerts/active')
 @login_required
@@ -461,47 +538,15 @@ def api_scrape_data():
 @bp.route('/api/gear-list')
 @login_required
 def api_gear_list():
-    """API endpoint to get gear list data"""
+    """Gear list from DB (refreshed by equipment scraper on its own schedule)."""
     try:
-        from app.scraper import PstraxScraper
-        
-        config = ScrapeConfig.query.first()
-        if not config or not config.pstrax_username or not config.pstrax_password_encrypted:
-            return jsonify({'error': 'No credentials configured', 'data': None}), 400
-        
-        password = config.get_password()
-        if not password:
-            return jsonify({'error': 'Could not decrypt password', 'data': None}), 400
-        
-        base_url = config.pstrax_base_url or 'https://app1.pstrax.com'
-        scraper = PstraxScraper()
-        
-        # Login first
-        login_success, login_result = scraper.login(config.pstrax_username, password, base_url=base_url)
-        if not login_success:
-            return jsonify({'error': 'Login failed', 'data': None}), 401
-        
-        # Get gear list
-        gear_list_response = scraper.getGearList(base_url=base_url)
-        
-        if gear_list_response.status_code == 200:
-            try:
-                gear_data = gear_list_response.json()
-                return jsonify({'data': gear_data, 'status': 'success'})
-            except (ValueError, json.JSONDecodeError):
-                # Try parsing as text/html (server returns wrong Content-Type)
-                try:
-                    gear_data = json.loads(gear_list_response.text)
-                    return jsonify({'data': gear_data, 'status': 'success'})
-                except (ValueError, json.JSONDecodeError):
-                    return jsonify({'error': 'Failed to parse JSON response', 'data': None}), 500
-        else:
-            return jsonify({
-                'error': f'Failed to fetch gear list. Status: {gear_list_response.status_code}',
-                'status_code': gear_list_response.status_code,
-                'data': None
-            }), gear_list_response.status_code
-            
+        rows = Equipment.query.order_by(Equipment.gearid).all()
+        data = [r.to_api_row() for r in rows]
+        return jsonify({
+            'data': {'data': data, 'not_found': []},
+            'status': 'success',
+            'count': len(data),
+        })
     except Exception as e:
         return jsonify({'error': str(e), 'data': None}), 500
 
@@ -516,6 +561,18 @@ def trigger_scrape():
         return jsonify({'success': True, 'message': 'Scrape triggered'})
     except Exception as e:
         flash(f'Error triggering scrape: {str(e)}', 'error')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/scrape/equipment-trigger', methods=['POST'])
+@login_required
+@admin_required
+def trigger_equipment_scrape():
+    """Manually run PSTrax equipment sync (replaces equipment table)."""
+    try:
+        run_equipment_scrape()
+        return jsonify({'success': True, 'message': 'Equipment sync completed'})
+    except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
 

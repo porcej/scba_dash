@@ -60,7 +60,19 @@
                                 {% endfor %}
                             </div>
                         {% endif %}
-                        <small class="form-text text-muted">Interval in minutes between automatic scrapes (current: {{ config.scrape_interval }} minutes)</small>
+                        <small class="form-text text-muted">How often PSTrax <strong>alerts</strong> are scraped (current: {{ config.scrape_interval }} minutes).</small>
+                    </div>
+                    <div class="mb-3">
+                        {{ form.equipment_scrape_interval_hours.label(class="form-label") }}
+                        {{ form.equipment_scrape_interval_hours(class="form-control", type="number", min="1", disabled=(not current_user.is_admin)) }}
+                        {% if form.equipment_scrape_interval_hours.errors %}
+                            <div class="text-danger small">
+                                {% for error in form.equipment_scrape_interval_hours.errors %}
+                                    <div>{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        <small class="form-text text-muted">How often cylinder equipment (type 11) is synced from PSTrax and the local equipment table is replaced (default 24 hours; current: {{ config.equipment_scrape_interval_hours or 24 }} hours).</small>
                     </div>
                     <hr class="my-4">
                     <h5 class="mb-3"><i class="bi bi-bell"></i> Alert Display Settings</h5>
@@ -93,7 +105,10 @@
                         <i class="bi bi-save"></i> Save Settings
                     </button>
                     <button type="button" class="btn btn-outline-secondary ms-2" onclick="triggerScrape()">
-                        <i class="bi bi-arrow-clockwise"></i> Trigger Scrape Now
+                        <i class="bi bi-arrow-clockwise"></i> Scrape Alerts Now
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary ms-2" onclick="triggerEquipmentScrape()">
+                        <i class="bi bi-hdd-network"></i> Sync Equipment Now
                     </button>
                     {% else %}
                     <div class="alert alert-info">
@@ -107,8 +122,16 @@
         {% if config.last_scrape %}
         <div class="card mt-3">
             <div class="card-body">
-                <h6>Last Scrape</h6>
+                <h6>Last alerts scrape</h6>
                 <p class="text-muted mb-0">{{ config.last_scrape.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+            </div>
+        </div>
+        {% endif %}
+        {% if config.last_equipment_scrape %}
+        <div class="card mt-3">
+            <div class="card-body">
+                <h6>Last equipment sync</h6>
+                <p class="text-muted mb-0">{{ config.last_equipment_scrape.strftime('%Y-%m-%d %H:%M:%S') }} UTC</p>
             </div>
         </div>
         {% endif %}
@@ -142,7 +165,7 @@
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                alert('Scrape triggered successfully!');
+                alert('Alerts scrape triggered successfully!');
                 setTimeout(() => location.reload(), 2000);
             } else {
                 alert('Error: ' + (data.error || 'Unknown error'));
@@ -151,6 +174,24 @@
         .catch(error => {
             console.error('Error:', error);
             alert('Error triggering scrape');
+        });
+    }
+    function triggerEquipmentScrape() {
+        fetchWithCSRF('/api/scrape/equipment-trigger', {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Equipment sync finished.');
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                alert('Error: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error syncing equipment');
         });
     }
 </script>

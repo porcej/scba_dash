@@ -11,7 +11,9 @@ from app.models.task import Task
 from app.models.alert import Alert
 from app.models.scrape_config import ScrapeConfig
 from app.models.scrape_data import ScrapeData
+from app.models.equipment import Equipment
+from app.models.cylinder_fill_log import CylinderFillLog
 
 # Export all models for backward compatibility
-__all__ = ['User', 'Task', 'Alert', 'ScrapeConfig', 'ScrapeData']
+__all__ = ['User', 'Task', 'Alert', 'ScrapeConfig', 'ScrapeData', 'Equipment', 'CylinderFillLog']
 

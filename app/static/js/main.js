@@ -105,6 +105,12 @@ function initSocketIO() {
             console.log('Alert update:', data);
             updateAlertBanner(data);
         });
+
+        socket.on('equipment_updated', function() {
+            if (window.location.pathname.includes('/dashboard') && typeof window.loadGearList === 'function') {
+                window.loadGearList();
+            }
+        });
     }
 }
 

@@ -34,11 +34,61 @@
         }
         .help { font-size: var(--fills-font-sm); }
         .table thead th { position: sticky; top: 0; background: var(--bs-body-bg); z-index: 2; }
-        .row-overdue { background: rgba(220, 53, 69, 0.18) !important; }     /* red */
-        .row-warning { background: rgba(255, 193, 7, 0.22) !important; }   /* yellow */
+        /* Bootstrap tables often set cell backgrounds; color the cells (strong). */
+        .row-overdue > td { background-color: rgba(220, 53, 69, 0.55) !important; }     /* red */
+        .row-warning > td { background-color: rgba(255, 193, 7, 0.65) !important; }   /* yellow */
+        .row-overdue > td:first-child { box-shadow: inset 6px 0 0 rgba(220, 53, 69, 1) !important; }
+        .row-warning > td:first-child { box-shadow: inset 6px 0 0 rgba(255, 193, 7, 1) !important; }
+        .row-overdue > td, .row-warning > td { font-weight: 600; }
         .badge-id { font-size: 18px; }
         .selected-pill { font-size: 18px; }
         .touch-check { transform: scale(1.6); transform-origin: left center; }
+
+        /* Full-screen blocking warning */
+        .fills-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 2000;
+            display: none;
+            background: rgba(220, 53, 69, 0.92);
+            color: #fff;
+        }
+        .fills-modal.show { display: flex; }
+        .fills-modal-inner {
+            width: min(920px, 94vw);
+            margin: auto;
+            padding: 28px 22px;
+            border-radius: 18px;
+            background: rgba(0,0,0,0.18);
+            box-shadow: 0 22px 60px rgba(0,0,0,0.35);
+        }
+        .fills-modal h1 {
+            font-size: 38px;
+            line-height: 1.15;
+            margin: 0 0 10px;
+            letter-spacing: 0.02em;
+        }
+        .fills-modal p {
+            font-size: 24px;
+            margin: 0 0 18px;
+        }
+        .fills-modal .do-not-fill {
+            font-size: 30px;
+            font-weight: 800;
+            letter-spacing: 0.06em;
+            margin: 14px 0 18px;
+        }
+        .fills-modal .btn-ack {
+            font-size: 26px;
+            padding: 14px 18px;
+        }
+        .fills-modal-warning {
+            background: rgba(255, 193, 7, 0.92);
+            color: #1b1f24;
+        }
+        .fills-modal-warning .fills-modal-inner {
+            background: rgba(255,255,255,0.28);
+        }
     </style>
 </head>
 <body>
@@ -138,9 +188,33 @@
         </div>
     </div>
 
+    <div class="fills-modal" id="overdueModal" role="dialog" aria-modal="true" aria-labelledby="overdueTitle">
+        <div class="fills-modal-inner">
+            <h1 id="overdueTitle"><i class="bi bi-exclamation-octagon-fill"></i> Warning</h1>
+            <p id="overdueMsg">Warning cylinder # is out of Hydro.</p>
+            <p>Please return to SCBA shop as soon as possible for a replacement.</p>
+            <div class="do-not-fill">DO NOT FILL</div>
+            <div class="d-grid gap-2">
+                <button type="button" class="btn btn-light btn-ack" id="overdueAck">Acknowledge</button>
+                <button type="button" class="btn btn-dark btn-ack" id="overdueFillAnyway">I understand the risks and will fill anyway.</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="fills-modal fills-modal-warning" id="warningModal" role="dialog" aria-modal="true" aria-labelledby="warningTitle">
+        <div class="fills-modal-inner">
+            <h1 id="warningTitle"><i class="bi bi-exclamation-triangle-fill"></i> Notice</h1>
+            <p id="warningMsg">Cylinder expires soon.</p>
+            <div class="d-grid">
+                <button type="button" class="btn btn-dark btn-ack" id="warningOk">Okay</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="application/json" id="cylindersData">{{ cylinders_json|safe }}</script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        const CYLINDERS = {{ cylinders_json|safe }};
+        const CYLINDERS = JSON.parse(document.getElementById('cylindersData').textContent);
 
         function getCSRFToken() {
             const metaTag = document.querySelector('meta[name="csrf-token"]');
@@ -166,6 +240,8 @@
         }
 
         const selected = new Map(); // internalid -> row
+        let pendingOverdueInternalId = null;
+        let pendingWarningInternalId = null;
 
         function hydroClass(nextHydroMdy) {
             const d = parseMDY(nextHydroMdy);
@@ -238,10 +314,77 @@
                 flash(`Cylinder #${id} not found`, 'warning');
                 return;
             }
+            const hc = hydroClass(row.next_hydro);
+            // Block selection of overdue cylinders (DO NOT FILL)
+            if (!selected.has(id) && hc === 'row-overdue') {
+                pendingOverdueInternalId = id;
+                showOverdueModal(id);
+                syncTableChecks();
+                return;
+            }
             if (selected.has(id)) selected.delete(id);
             else selected.set(id, row);
             syncTableChecks();
             renderSelected();
+            // Due within 6 months: allow selection but show a blocking notice.
+            if (hc === 'row-warning') {
+                pendingWarningInternalId = id;
+                showWarningModal(id, row.next_hydro);
+            }
+        }
+
+        function showOverdueModal(internalid) {
+            const modal = document.getElementById('overdueModal');
+            const msg = document.getElementById('overdueMsg');
+            if (!modal || !msg) return;
+            msg.textContent = `Warning cylinder # ${internalid} is out of Hydro. Please return to SCBA shop as soon as possible for a replacement. DO NOT FILL`;
+            modal.classList.add('show');
+            // focus acknowledge for quick tap/keyboard
+            const ack = document.getElementById('overdueAck');
+            if (ack) ack.focus();
+        }
+
+        function hideOverdueModal() {
+            const modal = document.getElementById('overdueModal');
+            if (!modal) return;
+            modal.classList.remove('show');
+            pendingOverdueInternalId = null;
+            const inp = document.getElementById('cylInput');
+            if (inp) inp.focus();
+        }
+
+        function fillAnywayOverdue() {
+            const id = pendingOverdueInternalId;
+            if (!id) {
+                hideOverdueModal();
+                return;
+            }
+            const row = CYLINDERS.find(x => x.internalid === id);
+            if (row) {
+                selected.set(id, row);
+                syncTableChecks();
+                renderSelected();
+            }
+            hideOverdueModal();
+        }
+
+        function showWarningModal(internalid, expireDate) {
+            const modal = document.getElementById('warningModal');
+            const msg = document.getElementById('warningMsg');
+            if (!modal || !msg) return;
+            msg.textContent = `Cylinder # ${internalid} expires on ${expireDate || ''} please return to air shop as soon as possible. Thank you.`.trim();
+            modal.classList.add('show');
+            const ok = document.getElementById('warningOk');
+            if (ok) ok.focus();
+        }
+
+        function hideWarningModal() {
+            const modal = document.getElementById('warningModal');
+            if (!modal) return;
+            modal.classList.remove('show');
+            pendingWarningInternalId = null;
+            const inp = document.getElementById('cylInput');
+            if (inp) inp.focus();
         }
 
         function syncTableChecks() {
@@ -257,9 +400,17 @@
             pills.innerHTML = '';
             const ids = Array.from(selected.keys()).sort();
             for (const id of ids) {
+                const row = selected.get(id);
+                const hc = row ? hydroClass(row.next_hydro) : '';
                 const btn = document.createElement('button');
                 btn.type = 'button';
-                btn.className = 'btn btn-outline-primary selected-pill';
+                if (hc === 'row-overdue') {
+                    btn.className = 'btn btn-danger selected-pill';
+                } else if (hc === 'row-warning') {
+                    btn.className = 'btn btn-warning text-dark selected-pill';
+                } else {
+                    btn.className = 'btn btn-outline-primary selected-pill';
+                }
                 btn.innerHTML = `<i class="bi bi-dash-circle"></i> ${escapeHtml(id)}`;
                 btn.addEventListener('click', () => {
                     selected.delete(id);
@@ -350,6 +501,18 @@
             });
 
             renderTable();
+            const ack = document.getElementById('overdueAck');
+            if (ack) {
+                ack.addEventListener('click', hideOverdueModal);
+            }
+            const fillAnyway = document.getElementById('overdueFillAnyway');
+            if (fillAnyway) {
+                fillAnyway.addEventListener('click', fillAnywayOverdue);
+            }
+            const warningOk = document.getElementById('warningOk');
+            if (warningOk) {
+                warningOk.addEventListener('click', hideWarningModal);
+            }
             const inp = document.getElementById('cylInput');
             inp.addEventListener('input', () => {
                 inp.value = (inp.value || '').replace(/\D/g, '').slice(0, 4);

@@ -8,7 +8,8 @@ This guide explains how to run the SCBA Dashboard using Docker Compose.
 
 ```bash
 SECRET_KEY=your-strong-secret-key-here
-DATABASE_URL=sqlite:///data/scba_dash.db
+# Optional; default in compose is sqlite under /app/data (host ./instance)
+DATABASE_URL=sqlite:////app/data/scba_dash.db
 SOCKETIO_ASYNC_MODE=threading
 SCRAPE_INTERVAL_MINUTES=15
 ```
@@ -44,32 +45,105 @@ Once started, the application will be available at:
 
 ## Data Persistence
 
-The database and application data are stored in the `./data` directory, which is mounted as a volume. This ensures data persists even when the container is restarted.
+By default, `docker-compose.yml` mounts **`./instance`** on the host to **`/app/data`** in the container (SQLite file: `/app/data/scba_dash.db`). Data survives container restarts as long as you keep that folder.
 
-## Creating an Admin User
+## Adding users (Docker)
 
-To create an admin user after the container is running:
+Run these **inside the running app container** so they use the same `DATABASE_URL` as the app.
+
+**Service name:** `scba-dash` (must match `docker-compose.yml`). Use either:
+
+- `docker compose exec scba-dash …` (Docker Compose V2), or  
+- `docker-compose exec scba-dash …` (older CLI).
+
+**1. Wait until the app has started** (migrations finished). Check logs if needed:
 
 ```bash
-docker-compose exec scba-dash python -c "
+docker compose logs -f scba-dash
+```
+
+### Create an administrator
+
+Replace `admin`, `YourSecurePassword` with your choices:
+
+```bash
+docker compose exec scba-dash python -c "
 from app import create_app, db
 from app.models import User
+
+USERNAME = 'admin'
+PASSWORD = 'YourSecurePassword'
+
 app = create_app()
 with app.app_context():
-    user = User(username='admin', is_admin=True)
-    user.set_password('your-password')
-    db.session.add(user)
-    db.session.commit()
-    print('Admin user created!')
+    if User.query.filter_by(username=USERNAME).first():
+        print('User already exists:', USERNAME)
+    else:
+        user = User(username=USERNAME, is_admin=True)
+        user.set_password(PASSWORD)
+        db.session.add(user)
+        db.session.commit()
+        print('Admin user created:', USERNAME)
 "
 ```
+
+Then open **http://localhost:8000** (or your host) and log in.
+
+### Create a non-admin user
+
+Same pattern with `is_admin=False` (can log in and use the dashboard; only admins get Settings / user management):
+
+```bash
+docker compose exec scba-dash python -c "
+from app import create_app, db
+from app.models import User
+
+USERNAME = 'operator'
+PASSWORD = 'YourSecurePassword'
+
+app = create_app()
+with app.app_context():
+    if User.query.filter_by(username=USERNAME).first():
+        print('User already exists:', USERNAME)
+    else:
+        user = User(username=USERNAME, is_admin=False)
+        user.set_password(PASSWORD)
+        db.session.add(user)
+        db.session.commit()
+        print('User created:', USERNAME)
+"
+```
+
+### Reset a user’s password
+
+```bash
+docker compose exec scba-dash python -c "
+from app import create_app, db
+from app.models import User
+
+USERNAME = 'admin'
+NEW_PASSWORD = 'NewSecurePassword'
+
+app = create_app()
+with app.app_context():
+    user = User.query.filter_by(username=USERNAME).first()
+    if not user:
+        print('User not found:', USERNAME)
+    else:
+        user.set_password(NEW_PASSWORD)
+        db.session.commit()
+        print('Password updated for:', USERNAME)
+"
+```
+
+**Tip:** If `docker compose exec` fails with “service not running”, use `docker compose ps` to confirm the service name and that the container is up.
 
 ## Environment Variables
 
 Key environment variables you can set:
 
 - `SECRET_KEY`: Flask secret key (required, should be strong)
-- `DATABASE_URL`: Database connection string (default: SQLite in `/app/data`)
+- `DATABASE_URL`: Database connection string (default: SQLite at `/app/data/scba_dash.db` in the container → host `./instance`)
 - `SOCKETIO_ASYNC_MODE`: Socket.IO async mode (`threading` for Docker, `gevent` for production)
 - `SCRAPE_INTERVAL_MINUTES`: Interval between automatic scrapes
 - `FLASK_ENV`: Set to `production` for production mode
@@ -107,8 +181,8 @@ docker-compose up -d --build
 - Ensure port 8000 is not already in use
 
 ### Database errors
-- Check that the `./data` directory exists and has proper permissions
-- For SQLite, ensure the directory is writable
+- Check that **`./instance`** exists on the host and is writable (matches the default volume in `docker-compose.yml`)
+- For SQLite, ensure that directory is writable by the container user
 
 ### Fresh deploy / “no such table: task” during migrations
 Older images used an empty baseline migration, so a **new** SQLite file could be stamped without creating tables. Current images:
@@ -118,7 +192,7 @@ Older images used an empty baseline migration, so a **new** SQLite file could be
 After pulling a fixed image, restart the container. If a volume is still broken, remove the DB file or run:
 
 ```bash
-docker-compose down -v   # deletes persisted ./data — backup first if needed
+docker compose down -v   # removes volumes — backup `./instance` first if you need the DB
 docker-compose up -d --build
 ```
 

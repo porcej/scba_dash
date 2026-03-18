@@ -7,6 +7,7 @@ Create Date: 2025-11-03 15:07:23.913310
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 
 # revision identifiers, used by Alembic.
@@ -17,6 +18,13 @@ depends_on = None
 
 
 def upgrade():
+    bind = op.get_bind()
+    insp = inspect(bind)
+    if not insp.has_table("task"):
+        return
+    cols = {c["name"] for c in insp.get_columns("task")}
+    if "priority" in cols:
+        return
     # Add priority column as nullable first (SQLite requirement)
     with op.batch_alter_table('task', schema=None) as batch_op:
         batch_op.add_column(sa.Column('priority', sa.Integer(), nullable=True))

@@ -31,11 +31,7 @@ def upgrade():
     op.execute("UPDATE alert SET color_theme = 'danger' WHERE color_theme IS NULL OR color_theme = ''")
     op.execute("UPDATE scrape_config SET default_alert_color = LOWER(default_alert_color)")
 
-    # Remove server defaults now that existing rows have values
-    if 'default_alert_color' not in existing_columns:
-        op.alter_column('scrape_config', 'default_alert_color', server_default=None)
-    if 'alerts_font_size' not in existing_columns:
-        op.alter_column('scrape_config', 'alerts_font_size', server_default=None)
+    # SQLite cannot ALTER COLUMN DROP DEFAULT; leaving server_default on column is fine.
 
 
 def downgrade():

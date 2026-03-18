@@ -110,6 +110,18 @@ docker-compose up -d --build
 - Check that the `./data` directory exists and has proper permissions
 - For SQLite, ensure the directory is writable
 
+### Fresh deploy / “no such table: task” during migrations
+Older images used an empty baseline migration, so a **new** SQLite file could be stamped without creating tables. Current images:
+- Create core tables in the baseline migration on first upgrade, and
+- **Auto-repair** on startup if `alembic_version` exists but the `user` table is missing (`create_all` + stamp head).
+
+After pulling a fixed image, restart the container. If a volume is still broken, remove the DB file or run:
+
+```bash
+docker-compose down -v   # deletes persisted ./data — backup first if needed
+docker-compose up -d --build
+```
+
 ### Socket.IO not working
 - Ensure `SOCKETIO_ASYNC_MODE=threading` is set (default in docker-compose.yml)
 - Check that the container is accessible from your browser

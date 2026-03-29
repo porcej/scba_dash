@@ -5,6 +5,8 @@ from urllib.parse import urlparse, urljoin, quote
 from bs4 import BeautifulSoup
 from datetime import datetime
 from app import db
+from sqlalchemy import func, text
+
 from app.models import ScrapeConfig, ScrapeData, Equipment
 from app.socketio_events import emit_scrape_update
 
@@ -402,6 +404,31 @@ class PstraxScraper:
             }
 
 
+def _prune_scrape_data_keep_latest(db):
+    """
+    Keep only the newest scrape_data row (highest id). SQLite grows quickly if
+    every scrape appends forever. Run VACUUM only when deleting many rows at
+    once (e.g. first cleanup of a huge history), not on every routine 1-row delete.
+    """
+    count = ScrapeData.query.count()
+    if count <= 1:
+        return
+    latest_id = db.session.query(func.max(ScrapeData.id)).scalar()
+    if latest_id is None:
+        return
+    deleted = ScrapeData.query.filter(ScrapeData.id != latest_id).delete(
+        synchronize_session=False
+    )
+    db.session.commit()
+    if deleted >= 100:
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(text("VACUUM"))
+                conn.commit()
+        except Exception as e:
+            print(f"VACUUM after scrape_data prune skipped: {e}")
+
+
 def perform_scrape():
     """Background task to perform scraping"""
     from app import db
@@ -453,6 +480,7 @@ def perform_scrape():
             db.session.add(scrape_data)
             config.last_scrape = datetime.utcnow()
             db.session.commit()
+            _prune_scrape_data_keep_latest(db)
             return
         
         # Determine target URL
@@ -500,7 +528,9 @@ def perform_scrape():
         # Update config
         config.last_scrape = datetime.utcnow()
         db.session.commit()
-        
+
+        _prune_scrape_data_keep_latest(db)
+
         emit_scrape_update(data)
         print("Scraping completed successfully")
 

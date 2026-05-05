@@ -331,6 +331,7 @@ def settings():
     form.default_alert_color.data = config.get_default_alert_color()
     form.alerts_font_size.data = config.get_alert_font_size()
     form.gear_list_type_ids.data = config.gear_list_type_ids or '11'
+    form.gear_list_statuses.data = config.gear_list_statuses or 'Active'
 
     selected_type_ids = set(config.get_gear_list_type_ids())
     gear_type_rows = (
@@ -362,11 +363,45 @@ def settings():
             'selected': True,
         })
 
+    selected_statuses = config.get_gear_list_statuses()
+    selected_statuses_lower = {s.lower() for s in selected_statuses}
+    status_rows = (
+        db.session.query(func.trim(Equipment.status))
+        .filter(Equipment.status.isnot(None))
+        .filter(func.trim(Equipment.status) != '')
+        .group_by(func.trim(Equipment.status))
+        .order_by(func.trim(Equipment.status).asc())
+        .all()
+    )
+    gear_statuses = []
+    seen_statuses_lower = set()
+    for (status_value,) in status_rows:
+        label = (status_value or '').strip()
+        if not label:
+            continue
+        key = label.lower()
+        seen_statuses_lower.add(key)
+        gear_statuses.append({
+            'label': label,
+            'selected': key in selected_statuses_lower,
+        })
+
+    missing_selected_statuses = [
+        s for s in selected_statuses if s.lower() not in seen_statuses_lower
+    ]
+    for status in missing_selected_statuses:
+        gear_statuses.append({
+            'label': status,
+            'selected': True,
+            'missing': True,
+        })
+
     return render_template(
         'settings.html',
         form=form,
         config=config,
         gear_types=gear_types,
+        gear_statuses=gear_statuses,
     )
 
 
@@ -416,6 +451,7 @@ def update_settings():
         else:
             config.alerts_font_size = 16
         config.set_gear_list_type_ids(form.gear_list_type_ids.data)
+        config.set_gear_list_statuses(form.gear_list_statuses.data)
         
         db.session.commit()
         
@@ -580,9 +616,12 @@ def api_gear_list():
     try:
         config = ScrapeConfig.query.first()
         type_ids = config.get_gear_list_type_ids() if config else [11]
+        statuses = config.get_gear_list_statuses() if config else ['Active']
+        status_keys = [s.lower() for s in statuses if str(s).strip()]
         rows = (
             Equipment.query
             .filter(Equipment.geartypeid.in_(type_ids))
+            .filter(func.lower(func.trim(Equipment.status)).in_(status_keys))
             .order_by(Equipment.gearid)
             .all()
         )
@@ -592,6 +631,7 @@ def api_gear_list():
             'status': 'success',
             'count': len(data),
             'gear_type_ids': type_ids,
+            'gear_statuses': statuses,
         })
     except Exception as e:
         return jsonify({'error': str(e), 'data': None}), 500

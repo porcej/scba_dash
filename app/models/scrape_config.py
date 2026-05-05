@@ -19,6 +19,7 @@ class ScrapeConfig(db.Model):
     default_alert_color = db.Column(db.String(20), default='danger', nullable=False)
     alerts_font_size = db.Column(db.Integer, default=16, nullable=False)  # pixels
     gear_list_type_ids = db.Column(db.String(255), default='11', nullable=False)
+    gear_list_statuses = db.Column(db.String(255), default='Active', nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     @staticmethod
@@ -109,4 +110,49 @@ class ScrapeConfig(db.Model):
             normalized.append(str(parsed))
 
         self.gear_list_type_ids = ",".join(normalized) if normalized else "11"
+
+    def get_gear_list_statuses(self):
+        """Return configured gear statuses as a normalized list."""
+        raw = (self.gear_list_statuses or "").strip()
+        if not raw:
+            return ["Active"]
+
+        parts = re.split(r"[\n,]+", raw)
+        normalized = []
+        seen = set()
+        for part in parts:
+            label = str(part).strip()
+            if not label:
+                continue
+            key = label.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            normalized.append(label)
+        return normalized or ["Active"]
+
+    def set_gear_list_statuses(self, value):
+        """Normalize and persist gear statuses as a comma-separated string."""
+        if value is None:
+            self.gear_list_statuses = "Active"
+            return
+
+        if isinstance(value, (list, tuple, set)):
+            parts = [str(v).strip() for v in value if str(v).strip()]
+        else:
+            parts = re.split(r"[\n,]+", str(value).strip())
+
+        normalized = []
+        seen = set()
+        for part in parts:
+            label = str(part).strip()
+            if not label:
+                continue
+            key = label.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            normalized.append(label)
+
+        self.gear_list_statuses = ",".join(normalized) if normalized else "Active"
 

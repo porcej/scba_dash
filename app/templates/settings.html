@@ -120,6 +120,55 @@
                         {% endif %}
                         <small class="form-text text-muted">Checked gear types are displayed in the SCBA Gear List; unchecked gear types are skipped.</small>
                     </div>
+                    <div class="mb-3">
+                        <label class="form-label">{{ form.gear_list_statuses.label.text }}</label>
+                        {{ form.gear_list_statuses(id="gear_list_statuses", type="hidden") }}
+                        <div class="table-responsive border rounded">
+                            <table class="table table-sm mb-0 align-middle" id="gear-statuses-table">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 80px;">Show</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for gear_status in gear_statuses %}
+                                    <tr>
+                                        <td class="text-center">
+                                            <input
+                                                class="form-check-input gear-status-checkbox"
+                                                type="checkbox"
+                                                value="{{ gear_status.label }}"
+                                                {% if gear_status.selected %}checked{% endif %}
+                                                {% if not current_user.is_admin %}disabled{% endif %}
+                                            >
+                                        </td>
+                                        <td>
+                                            {{ gear_status.label }}
+                                            {% if gear_status.missing %}
+                                                <span class="text-muted">(not in equipment table)</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% else %}
+                                    <tr>
+                                        <td colspan="2" class="text-muted text-center py-3">
+                                            No statuses found in the equipment table.
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% if form.gear_list_statuses.errors %}
+                            <div class="text-danger small mt-2">
+                                {% for error in form.gear_list_statuses.errors %}
+                                    <div>{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        <small class="form-text text-muted">Checked statuses are displayed in the SCBA Gear List; unchecked statuses are skipped. Default is <code>Active</code>.</small>
+                    </div>
                     <hr class="my-4">
                     <h5 class="mb-3"><i class="bi bi-bell"></i> Alert Display Settings</h5>
                     <div class="mb-3">
@@ -213,12 +262,26 @@
         hiddenInput.value = checkedValues.join(',');
     }
 
+    function syncSelectedGearStatuses() {
+        const hiddenInput = document.getElementById('gear_list_statuses');
+        if (!hiddenInput) return;
+        const checkedValues = Array.from(document.querySelectorAll('.gear-status-checkbox:checked'))
+            .map(function(input) { return input.value; })
+            .filter(function(v) { return v && v.trim(); });
+        hiddenInput.value = checkedValues.join(',');
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         const gearTypeCheckboxes = document.querySelectorAll('.gear-type-checkbox');
         gearTypeCheckboxes.forEach(function(input) {
             input.addEventListener('change', syncSelectedGearTypes);
         });
+        const gearStatusCheckboxes = document.querySelectorAll('.gear-status-checkbox');
+        gearStatusCheckboxes.forEach(function(input) {
+            input.addEventListener('change', syncSelectedGearStatuses);
+        });
         syncSelectedGearTypes();
+        syncSelectedGearStatuses();
     });
 
     function triggerScrape() {

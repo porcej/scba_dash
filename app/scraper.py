@@ -150,9 +150,22 @@ class PstraxScraper:
             has_home_link = soup.find(id='homeLinkButton') is not None
             has_dashboard = 'dashboard' in response_lower
             has_username = username.lower() in response_lower
+            page_title = (soup.title.string or '').strip().lower() if soup.title and soup.title.string else ''
+            has_login_form = (
+                soup.find('form', {'id': 'loginForm'}) is not None
+                or soup.find('input', {'id': 'txtpassword'}) is not None
+                or soup.find('input', {'name': 'txtuser_name'}) is not None
+            )
+            looks_like_login_page = (
+                has_login_form
+                or 'pstrax - login' in page_title
+                or 'login.php' in response_url_lower
+            )
             
-            # If we're not on login page OR have logout link OR have home button, login likely succeeded
-            if is_not_login_page or has_logout_link or has_home_link or has_dashboard:
+            # Do not treat "URL does not contain login" as success by itself.
+            # Some PSTrax login pages can still load at non-login-looking URLs.
+            has_positive_success_signal = bool(has_logout_link or has_home_link or has_dashboard)
+            if has_positive_success_signal and not looks_like_login_page:
                 # Try to find alerts link
                 alerts_link = self._find_alerts_link(response.text, base_url, response.url)
                 result = {'redirect_url': response.url}
@@ -168,9 +181,14 @@ class PstraxScraper:
                 error_details['response_preview'] = response.text[:500]
                 return False, error_details
             
-            # Uncertain case - not clearly on login page but also no clear success indicators
-            # Try to proceed anyway if status is 200
+            # Uncertain case - status 200, page does not look like login.
+            # Proceed, but only when we don't detect login markers.
             if response.status_code == 200:
+                if looks_like_login_page:
+                    error_details['step'] = 'login_verification'
+                    error_details['message'] = "Login failed - response still looks like login page"
+                    error_details['response_preview'] = response.text[:500]
+                    return False, error_details
                 print(f"Uncertain login status - proceeding with status 200, URL: {response.url}")
                 alerts_link = self._find_alerts_link(response.text, base_url, response.url)
                 result = {'redirect_url': response.url}
@@ -514,6 +532,11 @@ def perform_scrape():
                     data['status'] = 'error'
                     data['error'] = 'Failed to parse JSON response'
                     data['response_preview'] = scba_alerts_response.text[:500]
+                    data['response_content_type'] = scba_alerts_response.headers.get('Content-Type', 'unknown')
+                    data['response_url'] = scba_alerts_response.url
+                    lower_body = scba_alerts_response.text.lower()
+                    if '<title>pstrax - login' in lower_body or 'loginform' in lower_body:
+                        data['error'] = 'Authentication appears to have failed (received PSTrax login page)'
         else:
             data['error'] = f"Failed to fetch SCBA alerts. Status: {scba_alerts_response.status_code}"
             data['status_code'] = scba_alerts_response.status_code
@@ -532,7 +555,10 @@ def perform_scrape():
         _prune_scrape_data_keep_latest(db)
 
         emit_scrape_update(data)
-        print("Scraping completed successfully")
+        if data.get('status') == 'success':
+            print("Scraping completed successfully")
+        else:
+            print(f"Scraping completed with errors: {data.get('error')}")
 
 
 def perform_equipment_scrape():

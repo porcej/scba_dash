@@ -12,6 +12,7 @@ from app.scraper import perform_equipment_scrape as run_equipment_scrape
 from datetime import datetime
 import json
 import uuid
+from sqlalchemy import func
 
 bp = Blueprint('main', __name__)
 
@@ -329,8 +330,44 @@ def settings():
     )
     form.default_alert_color.data = config.get_default_alert_color()
     form.alerts_font_size.data = config.get_alert_font_size()
-    
-    return render_template('settings.html', form=form, config=config)
+    form.gear_list_type_ids.data = config.gear_list_type_ids or '11'
+
+    selected_type_ids = set(config.get_gear_list_type_ids())
+    gear_type_rows = (
+        db.session.query(Equipment.geartypeid, func.max(Equipment.geartype))
+        .filter(Equipment.geartypeid.isnot(None))
+        .group_by(Equipment.geartypeid)
+        .order_by(Equipment.geartypeid.asc())
+        .all()
+    )
+
+    gear_types = []
+    seen_ids = set()
+    for geartypeid, geartype in gear_type_rows:
+        if geartypeid is None:
+            continue
+        seen_ids.add(int(geartypeid))
+        gear_types.append({
+            'id': int(geartypeid),
+            'name': (geartype or 'Unknown Type').strip() or 'Unknown Type',
+            'selected': int(geartypeid) in selected_type_ids,
+        })
+
+    # Keep any configured IDs visible even if equipment table does not currently include them.
+    missing_selected_ids = sorted(selected_type_ids - seen_ids)
+    for type_id in missing_selected_ids:
+        gear_types.append({
+            'id': int(type_id),
+            'name': 'Unknown Type (not in equipment table)',
+            'selected': True,
+        })
+
+    return render_template(
+        'settings.html',
+        form=form,
+        config=config,
+        gear_types=gear_types,
+    )
 
 
 @bp.route('/settings/update', methods=['POST'])
@@ -378,6 +415,7 @@ def update_settings():
             config.alerts_font_size = int(form.alerts_font_size.data)
         else:
             config.alerts_font_size = 16
+        config.set_gear_list_type_ids(form.gear_list_type_ids.data)
         
         db.session.commit()
         
@@ -540,12 +578,20 @@ def api_scrape_data():
 def api_gear_list():
     """Gear list from DB (refreshed by equipment scraper on its own schedule)."""
     try:
-        rows = Equipment.query.order_by(Equipment.gearid).all()
+        config = ScrapeConfig.query.first()
+        type_ids = config.get_gear_list_type_ids() if config else [11]
+        rows = (
+            Equipment.query
+            .filter(Equipment.geartypeid.in_(type_ids))
+            .order_by(Equipment.gearid)
+            .all()
+        )
         data = [r.to_api_row() for r in rows]
         return jsonify({
             'data': {'data': data, 'not_found': []},
             'status': 'success',
             'count': len(data),
+            'gear_type_ids': type_ids,
         })
     except Exception as e:
         return jsonify({'error': str(e), 'data': None}), 500

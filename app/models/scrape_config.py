@@ -3,6 +3,7 @@ from datetime import datetime
 from cryptography.fernet import Fernet
 import base64
 import os
+import re
 
 
 class ScrapeConfig(db.Model):
@@ -17,6 +18,7 @@ class ScrapeConfig(db.Model):
     last_equipment_scrape = db.Column(db.DateTime, nullable=True)
     default_alert_color = db.Column(db.String(20), default='danger', nullable=False)
     alerts_font_size = db.Column(db.Integer, default=16, nullable=False)  # pixels
+    gear_list_type_ids = db.Column(db.String(255), default='11', nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     @staticmethod
@@ -64,4 +66,47 @@ class ScrapeConfig(db.Model):
             return int(self.alerts_font_size or 16)
         except (TypeError, ValueError):
             return 16
+
+    def get_gear_list_type_ids(self):
+        """Return configured gear type IDs as a normalized int list."""
+        raw = (self.gear_list_type_ids or "").strip()
+        if not raw:
+            return [11]
+
+        parts = re.split(r"[\s,]+", raw)
+        values = []
+        for part in parts:
+            if not part:
+                continue
+            try:
+                values.append(int(part))
+            except (TypeError, ValueError):
+                continue
+
+        return values or [11]
+
+    def set_gear_list_type_ids(self, value):
+        """Normalize and persist gear type IDs as a comma-separated string."""
+        if value is None:
+            self.gear_list_type_ids = "11"
+            return
+
+        if isinstance(value, (list, tuple, set)):
+            parts = [str(v).strip() for v in value if str(v).strip()]
+        else:
+            parts = re.split(r"[\s,]+", str(value).strip())
+
+        normalized = []
+        seen = set()
+        for part in parts:
+            try:
+                parsed = int(part)
+            except (TypeError, ValueError):
+                continue
+            if parsed in seen:
+                continue
+            seen.add(parsed)
+            normalized.append(str(parsed))
+
+        self.gear_list_type_ids = ",".join(normalized) if normalized else "11"
 

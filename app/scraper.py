@@ -222,7 +222,7 @@ class PstraxScraper:
         
         return response
     
-    def getGearList(self, base_url='https://app1.pstrax.com'):
+    def getGearList(self, base_url='https://app1.pstrax.com', typeid=''):
         """
         Get SCBA gear list data by posting form data to the gear-list endpoint.
         
@@ -236,11 +236,11 @@ class PstraxScraper:
         """
         gear_list_url = f'{base_url.rstrip("/")}/scba/gear-list-data.php'
         
-        # PSTrax cylinder list (typeid=11); same session cookies as alerts after login
+        # Request SCBA gear list. Empty typeid requests all available gear types.
         form_data = {
             'limitSearch': '0',
             'btnSubmit': 'Find',
-            'typeid': '11',
+            'typeid': str(typeid) if typeid is not None else '',
             'statusid': '',
             'sid': ''
         }
@@ -536,7 +536,7 @@ def perform_scrape():
 
 
 def perform_equipment_scrape():
-    """Fetch PSTrax equipment (cylinders) and replace the equipment table."""
+    """Fetch PSTrax equipment (all types) and replace the equipment table."""
     from app import db
 
     with db.session.no_autoflush:
@@ -560,7 +560,7 @@ def perform_equipment_scrape():
             print(f"Equipment scrape failed: login unsuccessful — {login_result}")
             return
 
-        resp = scraper.getGearList(base_url=base_url)
+        resp = scraper.getGearList(base_url=base_url, typeid='')
         if resp.status_code != 200:
             print(f"Equipment scrape failed: HTTP {resp.status_code}")
             return

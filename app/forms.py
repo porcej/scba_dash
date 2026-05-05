@@ -48,6 +48,7 @@ class ScrapeConfigForm(FlaskForm):
     )
     default_alert_color = SelectField('Default Alert Color', choices=ALERT_COLOR_CHOICES, default='danger', validators=[DataRequired()])
     alerts_font_size = IntegerField('Alerts Font Size (px)', default=16, validators=[Optional(), NumberRange(min=12, max=48)])
+    gear_list_type_ids = StringField('SCBA Gear List Type IDs', validators=[Optional(), Length(max=255)])
 
 
 class PasswordChangeForm(FlaskForm):

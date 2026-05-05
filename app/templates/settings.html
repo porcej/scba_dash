@@ -72,7 +72,53 @@
                                 {% endfor %}
                             </div>
                         {% endif %}
-                        <small class="form-text text-muted">How often cylinder equipment (type 11) is synced from PSTrax and the local equipment table is replaced (default 24 hours; current: {{ config.equipment_scrape_interval_hours or 24 }} hours).</small>
+                        <small class="form-text text-muted">How often equipment is synced from PSTrax and the local equipment table is replaced (default 24 hours; current: {{ config.equipment_scrape_interval_hours or 24 }} hours).</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">{{ form.gear_list_type_ids.label.text }}</label>
+                        {{ form.gear_list_type_ids(id="gear_list_type_ids", type="hidden") }}
+                        <div class="table-responsive border rounded">
+                            <table class="table table-sm mb-0 align-middle" id="gear-types-table">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 80px;">Show</th>
+                                        <th>Type Name</th>
+                                        <th style="width: 100px;">Type ID</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for gear_type in gear_types %}
+                                    <tr>
+                                        <td class="text-center">
+                                            <input
+                                                class="form-check-input gear-type-checkbox"
+                                                type="checkbox"
+                                                value="{{ gear_type.id }}"
+                                                {% if gear_type.selected %}checked{% endif %}
+                                                {% if not current_user.is_admin %}disabled{% endif %}
+                                            >
+                                        </td>
+                                        <td>{{ gear_type.name }}</td>
+                                        <td><code>{{ gear_type.id }}</code></td>
+                                    </tr>
+                                    {% else %}
+                                    <tr>
+                                        <td colspan="3" class="text-muted text-center py-3">
+                                            No gear types found in the equipment table.
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% if form.gear_list_type_ids.errors %}
+                            <div class="text-danger small mt-2">
+                                {% for error in form.gear_list_type_ids.errors %}
+                                    <div>{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        <small class="form-text text-muted">Checked gear types are displayed in the SCBA Gear List; unchecked gear types are skipped.</small>
                     </div>
                     <hr class="my-4">
                     <h5 class="mb-3"><i class="bi bi-bell"></i> Alert Display Settings</h5>
@@ -158,6 +204,23 @@
 
 {% block extra_scripts %}
 <script>
+    function syncSelectedGearTypes() {
+        const hiddenInput = document.getElementById('gear_list_type_ids');
+        if (!hiddenInput) return;
+        const checkedValues = Array.from(document.querySelectorAll('.gear-type-checkbox:checked'))
+            .map(function(input) { return input.value; })
+            .filter(function(v) { return v && v.trim(); });
+        hiddenInput.value = checkedValues.join(',');
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const gearTypeCheckboxes = document.querySelectorAll('.gear-type-checkbox');
+        gearTypeCheckboxes.forEach(function(input) {
+            input.addEventListener('change', syncSelectedGearTypes);
+        });
+        syncSelectedGearTypes();
+    });
+
     function triggerScrape() {
         fetchWithCSRF('/api/scrape/trigger', {
             method: 'POST'

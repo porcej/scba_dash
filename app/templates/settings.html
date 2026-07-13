@@ -3,255 +3,504 @@
 {% block title %}Settings - SCBA Dashboard{% endblock %}
 
 {% block content %}
+{% set active_tab = active_settings_tab if active_settings_tab in ['pstrax', 'fills'] else 'pstrax' %}
 <div class="row">
-    <div class="col-md-8 col-lg-6">
+    <div class="col-12 col-xl-10">
         <h2><i class="bi bi-gear"></i> Settings</h2>
-        
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">Pstrax Configuration</h5>
+
+        <ul class="nav nav-tabs mb-3" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link {% if active_tab == 'pstrax' %}active{% endif %}"
+                        id="tab-pstrax"
+                        data-bs-toggle="tab"
+                        data-bs-target="#pane-pstrax"
+                        type="button"
+                        role="tab"
+                        aria-controls="pane-pstrax"
+                        aria-selected="{{ 'true' if active_tab == 'pstrax' else 'false' }}">
+                    <i class="bi bi-cloud-download"></i> Pstrax
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link {% if active_tab == 'fills' %}active{% endif %}"
+                        id="tab-fills"
+                        data-bs-toggle="tab"
+                        data-bs-target="#pane-fills"
+                        type="button"
+                        role="tab"
+                        aria-controls="pane-fills"
+                        aria-selected="{{ 'true' if active_tab == 'fills' else 'false' }}">
+                    <i class="bi bi-droplet"></i> Fills
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content">
+            <div class="tab-pane fade {% if active_tab == 'pstrax' %}show active{% endif %}"
+                 id="pane-pstrax"
+                 role="tabpanel"
+                 aria-labelledby="tab-pstrax">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Pstrax Configuration</h5>
+                    </div>
+                    <div class="card-body">
+                        <form method="POST" action="{{ url_for('main.update_settings') }}">
+                            {{ form.hidden_tag() }}
+                            <div class="mb-3">
+                                {{ form.pstrax_base_url.label(class="form-label") }}
+                                {{ form.pstrax_base_url(class="form-control", disabled=(not current_user.is_admin)) }}
+                                {% if form.pstrax_base_url.errors %}
+                                    <div class="text-danger small">
+                                        {% for error in form.pstrax_base_url.errors %}
+                                            <div>{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                                <small class="form-text text-muted">Base URL of the pstrax website (e.g., https://pstrax.com)</small>
+                            </div>
+                            <div class="mb-3">
+                                {{ form.pstrax_username.label(class="form-label") }}
+                                {{ form.pstrax_username(class="form-control", disabled=(not current_user.is_admin)) }}
+                                {% if form.pstrax_username.errors %}
+                                    <div class="text-danger small">
+                                        {% for error in form.pstrax_username.errors %}
+                                            <div>{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                                <small class="form-text text-muted">Username for logging into pstrax website</small>
+                            </div>
+                            <div class="mb-3">
+                                {{ form.pstrax_password.label(class="form-label") }}
+                                {{ form.pstrax_password(class="form-control", disabled=(not current_user.is_admin)) }}
+                                {% if form.pstrax_password.errors %}
+                                    <div class="text-danger small">
+                                        {% for error in form.pstrax_password.errors %}
+                                            <div>{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                                <small class="form-text text-muted">Leave blank to keep current password</small>
+                            </div>
+                            <div class="mb-3">
+                                {{ form.scrape_interval.label(class="form-label") }}
+                                {{ form.scrape_interval(class="form-control", type="number", min="1", disabled=(not current_user.is_admin)) }}
+                                {% if form.scrape_interval.errors %}
+                                    <div class="text-danger small">
+                                        {% for error in form.scrape_interval.errors %}
+                                            <div>{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                                <small class="form-text text-muted">How often PSTrax <strong>alerts</strong> are scraped (current: {{ config.scrape_interval }} minutes).</small>
+                            </div>
+                            <div class="mb-3">
+                                {{ form.equipment_scrape_interval_hours.label(class="form-label") }}
+                                {{ form.equipment_scrape_interval_hours(class="form-control", type="number", min="1", disabled=(not current_user.is_admin)) }}
+                                {% if form.equipment_scrape_interval_hours.errors %}
+                                    <div class="text-danger small">
+                                        {% for error in form.equipment_scrape_interval_hours.errors %}
+                                            <div>{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                                <small class="form-text text-muted">How often equipment is synced from PSTrax and the local equipment table is replaced (default 24 hours; current: {{ config.equipment_scrape_interval_hours or 24 }} hours).</small>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">{{ form.gear_list_type_ids.label.text }}</label>
+                                {{ form.gear_list_type_ids(id="gear_list_type_ids", type="hidden") }}
+                                <div class="table-responsive border rounded">
+                                    <table class="table table-sm mb-0 align-middle" id="gear-types-table">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th style="width: 80px;">Show</th>
+                                                <th>Type Name</th>
+                                                <th style="width: 100px;">Type ID</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for gear_type in gear_types %}
+                                            <tr>
+                                                <td class="text-center">
+                                                    <input
+                                                        class="form-check-input gear-type-checkbox"
+                                                        type="checkbox"
+                                                        value="{{ gear_type.id }}"
+                                                        {% if gear_type.selected %}checked{% endif %}
+                                                        {% if not current_user.is_admin %}disabled{% endif %}
+                                                    >
+                                                </td>
+                                                <td>{{ gear_type.name }}</td>
+                                                <td><code>{{ gear_type.id }}</code></td>
+                                            </tr>
+                                            {% else %}
+                                            <tr>
+                                                <td colspan="3" class="text-muted text-center py-3">
+                                                    No gear types found in the equipment table.
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {% if form.gear_list_type_ids.errors %}
+                                    <div class="text-danger small mt-2">
+                                        {% for error in form.gear_list_type_ids.errors %}
+                                            <div>{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                                <small class="form-text text-muted">Checked gear types are displayed in the SCBA Gear List; unchecked gear types are skipped.</small>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">{{ form.gear_list_statuses.label.text }}</label>
+                                {{ form.gear_list_statuses(id="gear_list_statuses", type="hidden") }}
+                                <div class="table-responsive border rounded">
+                                    <table class="table table-sm mb-0 align-middle" id="gear-statuses-table">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th style="width: 80px;">Show</th>
+                                                <th>Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for gear_status in gear_statuses %}
+                                            <tr>
+                                                <td class="text-center">
+                                                    <input
+                                                        class="form-check-input gear-status-checkbox"
+                                                        type="checkbox"
+                                                        value="{{ gear_status.label }}"
+                                                        {% if gear_status.selected %}checked{% endif %}
+                                                        {% if not current_user.is_admin %}disabled{% endif %}
+                                                    >
+                                                </td>
+                                                <td>
+                                                    {{ gear_status.label }}
+                                                    {% if gear_status.missing %}
+                                                        <span class="text-muted">(not in equipment table)</span>
+                                                    {% endif %}
+                                                </td>
+                                            </tr>
+                                            {% else %}
+                                            <tr>
+                                                <td colspan="2" class="text-muted text-center py-3">
+                                                    No statuses found in the equipment table.
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {% if form.gear_list_statuses.errors %}
+                                    <div class="text-danger small mt-2">
+                                        {% for error in form.gear_list_statuses.errors %}
+                                            <div>{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                                <small class="form-text text-muted">Checked statuses are displayed in the SCBA Gear List; unchecked statuses are skipped. Default is <code>Active</code>.</small>
+                            </div>
+                            <hr class="my-4">
+                            <h5 class="mb-3"><i class="bi bi-bell"></i> Alert Display Settings</h5>
+                            <div class="mb-3">
+                                {{ form.default_alert_color.label(class="form-label") }}
+                                {{ form.default_alert_color(class="form-select", disabled=(not current_user.is_admin)) }}
+                                {% if form.default_alert_color.errors %}
+                                    <div class="text-danger small">
+                                        {% for error in form.default_alert_color.errors %}
+                                            <div>{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                                <small class="form-text text-muted">Select the default color for alerts without an assigned color.</small>
+                            </div>
+                            <div class="mb-3">
+                                {{ form.alerts_font_size.label(class="form-label") }}
+                                {{ form.alerts_font_size(class="form-control", type="number", min="12", max="48", step="1", disabled=(not current_user.is_admin)) }}
+                                {% if form.alerts_font_size.errors %}
+                                    <div class="text-danger small">
+                                        {% for error in form.alerts_font_size.errors %}
+                                            <div>{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                                <small class="form-text text-muted">Set the font size (in pixels) for alerts displayed on the dashboard.</small>
+                            </div>
+                            {% if current_user.is_admin %}
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-save"></i> Save Settings
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary ms-2" onclick="triggerScrape()">
+                                <i class="bi bi-arrow-clockwise"></i> Scrape Alerts Now
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary ms-2" onclick="triggerEquipmentScrape()">
+                                <i class="bi bi-hdd-network"></i> Sync Equipment Now
+                            </button>
+                            {% else %}
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle"></i> Only administrators can update settings.
+                            </div>
+                            {% endif %}
+                        </form>
+                    </div>
+                </div>
+
+                {% if config.last_scrape %}
+                <div class="card mt-3">
+                    <div class="card-body">
+                        <h6>Last alerts scrape</h6>
+                        <p class="text-muted mb-0">{{ config.last_scrape.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+                    </div>
+                </div>
+                {% endif %}
+                {% if config.last_equipment_scrape %}
+                <div class="card mt-3">
+                    <div class="card-body">
+                        <h6>Last equipment sync</h6>
+                        <p class="text-muted mb-0">{{ config.last_equipment_scrape.strftime('%Y-%m-%d %H:%M:%S') }} UTC</p>
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-question-circle"></i> Troubleshooting Login Issues</h6>
+                    </div>
+                    <div class="card-body">
+                        <p class="small">If you're getting "Login failed" errors, check the following:</p>
+                        <ul class="small">
+                            <li><strong>Verify credentials:</strong> Make sure your username and password are correct</li>
+                            <li><strong>Check the URL:</strong> Verify the Base URL is correct (the login page should be at <code>&lt;Base URL&gt;/login</code>)</li>
+                            <li><strong>Form fields:</strong> The scraper tries common field names, but may need customization</li>
+                            <li><strong>CAPTCHA:</strong> If the website uses CAPTCHA, the scraper cannot bypass it</li>
+                            <li><strong>Error details:</strong> Check the dashboard's scraped data section for detailed error information</li>
+                        </ul>
+                        <p class="small mb-0"><strong>Note:</strong> The scraper code in <code>app/scraper.py</code> may need to be customized for your specific pstrax website structure.</p>
+                    </div>
+                </div>
             </div>
-            <div class="card-body">
-                <form method="POST" action="{{ url_for('main.update_settings') }}">
-                    {{ form.hidden_tag() }}
-                    <div class="mb-3">
-                        {{ form.pstrax_base_url.label(class="form-label") }}
-                        {{ form.pstrax_base_url(class="form-control", disabled=(not current_user.is_admin)) }}
-                        {% if form.pstrax_base_url.errors %}
-                            <div class="text-danger small">
-                                {% for error in form.pstrax_base_url.errors %}
-                                    <div>{{ error }}</div>
-                                {% endfor %}
-                            </div>
-                        {% endif %}
-                        <small class="form-text text-muted">Base URL of the pstrax website (e.g., https://pstrax.com)</small>
+
+            <div class="tab-pane fade {% if active_tab == 'fills' %}show active{% endif %}"
+                 id="pane-fills"
+                 role="tabpanel"
+                 aria-labelledby="tab-fills">
+                <div class="card mb-3">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="bi bi-geo-alt"></i> Fill Sites</h5>
                     </div>
-                    <div class="mb-3">
-                        {{ form.pstrax_username.label(class="form-label") }}
-                        {{ form.pstrax_username(class="form-control", disabled=(not current_user.is_admin)) }}
-                        {% if form.pstrax_username.errors %}
-                            <div class="text-danger small">
-                                {% for error in form.pstrax_username.errors %}
-                                    <div>{{ error }}</div>
-                                {% endfor %}
+                    <div class="card-body">
+                        {% if current_user.is_admin %}
+                        <form method="POST" action="{{ url_for('main.create_fill_site') }}" class="row g-2 align-items-end mb-3">
+                            {{ fill_site_form.hidden_tag() }}
+                            <div class="col-md-8">
+                                {{ fill_site_form.name.label(class="form-label") }}
+                                {{ fill_site_form.name(class="form-control", placeholder="e.g. Station 1") }}
                             </div>
-                        {% endif %}
-                        <small class="form-text text-muted">Username for logging into pstrax website</small>
-                    </div>
-                    <div class="mb-3">
-                        {{ form.pstrax_password.label(class="form-label") }}
-                        {{ form.pstrax_password(class="form-control", disabled=(not current_user.is_admin)) }}
-                        {% if form.pstrax_password.errors %}
-                            <div class="text-danger small">
-                                {% for error in form.pstrax_password.errors %}
-                                    <div>{{ error }}</div>
-                                {% endfor %}
+                            <div class="col-md-4">
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="bi bi-plus-lg"></i> Add Fill Site
+                                </button>
                             </div>
+                        </form>
                         {% endif %}
-                        <small class="form-text text-muted">Leave blank to keep current password</small>
-                    </div>
-                    <div class="mb-3">
-                        {{ form.scrape_interval.label(class="form-label") }}
-                        {{ form.scrape_interval(class="form-control", type="number", min="1", disabled=(not current_user.is_admin)) }}
-                        {% if form.scrape_interval.errors %}
-                            <div class="text-danger small">
-                                {% for error in form.scrape_interval.errors %}
-                                    <div>{{ error }}</div>
-                                {% endfor %}
-                            </div>
-                        {% endif %}
-                        <small class="form-text text-muted">How often PSTrax <strong>alerts</strong> are scraped (current: {{ config.scrape_interval }} minutes).</small>
-                    </div>
-                    <div class="mb-3">
-                        {{ form.equipment_scrape_interval_hours.label(class="form-label") }}
-                        {{ form.equipment_scrape_interval_hours(class="form-control", type="number", min="1", disabled=(not current_user.is_admin)) }}
-                        {% if form.equipment_scrape_interval_hours.errors %}
-                            <div class="text-danger small">
-                                {% for error in form.equipment_scrape_interval_hours.errors %}
-                                    <div>{{ error }}</div>
-                                {% endfor %}
-                            </div>
-                        {% endif %}
-                        <small class="form-text text-muted">How often equipment is synced from PSTrax and the local equipment table is replaced (default 24 hours; current: {{ config.equipment_scrape_interval_hours or 24 }} hours).</small>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">{{ form.gear_list_type_ids.label.text }}</label>
-                        {{ form.gear_list_type_ids(id="gear_list_type_ids", type="hidden") }}
+
                         <div class="table-responsive border rounded">
-                            <table class="table table-sm mb-0 align-middle" id="gear-types-table">
+                            <table class="table table-sm mb-0 align-middle">
                                 <thead class="table-light">
                                     <tr>
-                                        <th style="width: 80px;">Show</th>
-                                        <th>Type Name</th>
-                                        <th style="width: 100px;">Type ID</th>
+                                        <th>Name</th>
+                                        <th style="width: 220px;">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {% for gear_type in gear_types %}
+                                    {% for site in fill_sites %}
                                     <tr>
-                                        <td class="text-center">
-                                            <input
-                                                class="form-check-input gear-type-checkbox"
-                                                type="checkbox"
-                                                value="{{ gear_type.id }}"
-                                                {% if gear_type.selected %}checked{% endif %}
-                                                {% if not current_user.is_admin %}disabled{% endif %}
-                                            >
-                                        </td>
-                                        <td>{{ gear_type.name }}</td>
-                                        <td><code>{{ gear_type.id }}</code></td>
-                                    </tr>
-                                    {% else %}
-                                    <tr>
-                                        <td colspan="3" class="text-muted text-center py-3">
-                                            No gear types found in the equipment table.
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                        {% if form.gear_list_type_ids.errors %}
-                            <div class="text-danger small mt-2">
-                                {% for error in form.gear_list_type_ids.errors %}
-                                    <div>{{ error }}</div>
-                                {% endfor %}
-                            </div>
-                        {% endif %}
-                        <small class="form-text text-muted">Checked gear types are displayed in the SCBA Gear List; unchecked gear types are skipped.</small>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">{{ form.gear_list_statuses.label.text }}</label>
-                        {{ form.gear_list_statuses(id="gear_list_statuses", type="hidden") }}
-                        <div class="table-responsive border rounded">
-                            <table class="table table-sm mb-0 align-middle" id="gear-statuses-table">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th style="width: 80px;">Show</th>
-                                        <th>Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for gear_status in gear_statuses %}
-                                    <tr>
-                                        <td class="text-center">
-                                            <input
-                                                class="form-check-input gear-status-checkbox"
-                                                type="checkbox"
-                                                value="{{ gear_status.label }}"
-                                                {% if gear_status.selected %}checked{% endif %}
-                                                {% if not current_user.is_admin %}disabled{% endif %}
-                                            >
+                                        <td>
+                                            {% if current_user.is_admin %}
+                                            <form method="POST" action="{{ url_for('main.update_fill_site', site_id=site.id) }}" class="d-flex gap-2">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <input type="text" name="name" class="form-control form-control-sm" value="{{ site.name }}" required maxlength="128">
+                                                <button type="submit" class="btn btn-sm btn-outline-primary" title="Save">
+                                                    <i class="bi bi-save"></i>
+                                                </button>
+                                            </form>
+                                            {% else %}
+                                            {{ site.name }}
+                                            {% endif %}
                                         </td>
                                         <td>
-                                            {{ gear_status.label }}
-                                            {% if gear_status.missing %}
-                                                <span class="text-muted">(not in equipment table)</span>
+                                            {% if current_user.is_admin %}
+                                            <form method="POST"
+                                                  action="{{ url_for('main.delete_fill_site', site_id=site.id) }}"
+                                                  onsubmit="return confirm('Delete fill site \"{{ site.name }}\"?');">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                    <i class="bi bi-trash"></i> Delete
+                                                </button>
+                                            </form>
+                                            {% else %}
+                                            <span class="text-muted small">View only</span>
                                             {% endif %}
                                         </td>
                                     </tr>
                                     {% else %}
                                     <tr>
-                                        <td colspan="2" class="text-muted text-center py-3">
-                                            No statuses found in the equipment table.
-                                        </td>
+                                        <td colspan="2" class="text-muted text-center py-3">No fill sites yet.</td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
                             </table>
                         </div>
-                        {% if form.gear_list_statuses.errors %}
-                            <div class="text-danger small mt-2">
-                                {% for error in form.gear_list_statuses.errors %}
-                                    <div>{{ error }}</div>
-                                {% endfor %}
-                            </div>
-                        {% endif %}
-                        <small class="form-text text-muted">Checked statuses are displayed in the SCBA Gear List; unchecked statuses are skipped. Default is <code>Active</code>.</small>
                     </div>
-                    <hr class="my-4">
-                    <h5 class="mb-3"><i class="bi bi-bell"></i> Alert Display Settings</h5>
-                    <div class="mb-3">
-                        {{ form.default_alert_color.label(class="form-label") }}
-                        {{ form.default_alert_color(class="form-select", disabled=(not current_user.is_admin)) }}
-                        {% if form.default_alert_color.errors %}
-                            <div class="text-danger small">
-                                {% for error in form.default_alert_color.errors %}
-                                    <div>{{ error }}</div>
-                                {% endfor %}
-                            </div>
-                        {% endif %}
-                        <small class="form-text text-muted">Select the default color for alerts without an assigned color.</small>
-                    </div>
-                    <div class="mb-3">
-                        {{ form.alerts_font_size.label(class="form-label") }}
-                        {{ form.alerts_font_size(class="form-control", type="number", min="12", max="48", step="1", disabled=(not current_user.is_admin)) }}
-                        {% if form.alerts_font_size.errors %}
-                            <div class="text-danger small">
-                                {% for error in form.alerts_font_size.errors %}
-                                    <div>{{ error }}</div>
-                                {% endfor %}
-                            </div>
-                        {% endif %}
-                        <small class="form-text text-muted">Set the font size (in pixels) for alerts displayed on the dashboard.</small>
-                    </div>
-                    {% if current_user.is_admin %}
-                    <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-save"></i> Save Settings
-                    </button>
-                    <button type="button" class="btn btn-outline-secondary ms-2" onclick="triggerScrape()">
-                        <i class="bi bi-arrow-clockwise"></i> Scrape Alerts Now
-                    </button>
-                    <button type="button" class="btn btn-outline-secondary ms-2" onclick="triggerEquipmentScrape()">
-                        <i class="bi bi-hdd-network"></i> Sync Equipment Now
-                    </button>
-                    {% else %}
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle"></i> Only administrators can update settings.
-                    </div>
-                    {% endif %}
-                </form>
-            </div>
-        </div>
+                </div>
 
-        {% if config.last_scrape %}
-        <div class="card mt-3">
-            <div class="card-body">
-                <h6>Last alerts scrape</h6>
-                <p class="text-muted mb-0">{{ config.last_scrape.strftime('%Y-%m-%d %H:%M:%S') }}</p>
-            </div>
-        </div>
-        {% endif %}
-        {% if config.last_equipment_scrape %}
-        <div class="card mt-3">
-            <div class="card-body">
-                <h6>Last equipment sync</h6>
-                <p class="text-muted mb-0">{{ config.last_equipment_scrape.strftime('%Y-%m-%d %H:%M:%S') }} UTC</p>
-            </div>
-        </div>
-        {% endif %}
-        
-        <div class="card mt-3">
-            <div class="card-header">
-                <h6 class="mb-0"><i class="bi bi-question-circle"></i> Troubleshooting Login Issues</h6>
-            </div>
-            <div class="card-body">
-                <p class="small">If you're getting "Login failed" errors, check the following:</p>
-                <ul class="small">
-                    <li><strong>Verify credentials:</strong> Make sure your username and password are correct</li>
-                    <li><strong>Check the URL:</strong> Verify the Base URL is correct (the login page should be at <code>&lt;Base URL&gt;/login</code>)</li>
-                    <li><strong>Form fields:</strong> The scraper tries common field names, but may need customization</li>
-                    <li><strong>CAPTCHA:</strong> If the website uses CAPTCHA, the scraper cannot bypass it</li>
-                    <li><strong>Error details:</strong> Check the dashboard's scraped data section for detailed error information</li>
-                </ul>
-                <p class="small mb-0"><strong>Note:</strong> The scraper code in <code>app/scraper.py</code> may need to be customized for your specific pstrax website structure.</p>
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-tablet"></i> Fill Boards</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if current_user.is_admin %}
+                        <form method="POST" action="{{ url_for('main.create_fill_board') }}" class="row g-2 align-items-end mb-4">
+                            {{ fill_board_form.hidden_tag() }}
+                            <div class="col-md-4">
+                                {{ fill_board_form.name.label(class="form-label") }}
+                                {{ fill_board_form.name(class="form-control", placeholder="e.g. Bay A iPad") }}
+                            </div>
+                            <div class="col-md-4">
+                                {{ fill_board_form.fill_site_id.label(class="form-label") }}
+                                {{ fill_board_form.fill_site_id(class="form-select") }}
+                            </div>
+                            <div class="col-md-4">
+                                <button type="submit" class="btn btn-primary w-100" {% if not fill_sites %}disabled{% endif %}>
+                                    <i class="bi bi-plus-lg"></i> Add Fill Board
+                                </button>
+                            </div>
+                        </form>
+                        {% if not fill_sites %}
+                        <div class="alert alert-warning">Create at least one fill site before adding a fill board.</div>
+                        {% endif %}
+                        {% endif %}
+
+                        {% for board in fill_boards %}
+                        {% set board_url = url_for('main.public_fills', board_key=board.key, _external=True) %}
+                        <div class="border rounded p-3 mb-3">
+                            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+                                <div>
+                                    <h6 class="mb-1">{{ board.name }}</h6>
+                                    <div class="text-muted small">Fill Site: <strong>{{ board.fill_site.name if board.fill_site else 'Unknown' }}</strong></div>
+                                </div>
+                                {% if current_user.is_admin %}
+                                <form method="POST"
+                                      action="{{ url_for('main.delete_fill_board', board_id=board.id) }}"
+                                      onsubmit="return confirm('Delete fill board \"{{ board.name }}\"?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="bi bi-trash"></i> Delete
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </div>
+
+                            {% if current_user.is_admin %}
+                            <form method="POST" action="{{ url_for('main.update_fill_board', board_id=board.id) }}" class="row g-2 align-items-end mb-3">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <div class="col-md-4">
+                                    <label class="form-label">Name</label>
+                                    <input type="text" name="name" class="form-control" value="{{ board.name }}" required maxlength="128">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Fill Site</label>
+                                    <select name="fill_site_id" class="form-select" required>
+                                        {% for site in fill_sites %}
+                                        <option value="{{ site.id }}" {% if site.id == board.fill_site_id %}selected{% endif %}>{{ site.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <button type="submit" class="btn btn-outline-primary w-100">
+                                        <i class="bi bi-save"></i> Save Board
+                                    </button>
+                                </div>
+                            </form>
+                            {% endif %}
+
+                            <div class="mb-3">
+                                <label class="form-label">Key</label>
+                                <textarea class="form-control font-monospace mb-2" rows="3" readonly>{{ board.key }}</textarea>
+                                {% if current_user.is_admin %}
+                                <button type="button"
+                                        class="btn btn-outline-secondary btn-sm"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#refreshKeyModal"
+                                        data-board-name="{{ board.name }}"
+                                        data-refresh-action="{{ url_for('main.regenerate_fill_board_key', board_id=board.id) }}">
+                                    <i class="bi bi-arrow-clockwise"></i> Refresh Key
+                                </button>
+                                {% endif %}
+                                <div class="form-text">Automatically generated 256-character key.</div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">URL</label>
+                                <input type="text" class="form-control font-monospace" value="{{ board_url }}" readonly>
+                            </div>
+
+                            <div>
+                                <label class="form-label">QR Code</label>
+                                <div class="fill-board-qr border rounded p-2 bg-white d-inline-block"
+                                     data-qr-url="{{ board_url }}"
+                                     style="width: 180px; height: 180px;"></div>
+                            </div>
+                        </div>
+                        {% else %}
+                        <p class="text-muted mb-0">No fill boards yet.</p>
+                        {% endfor %}
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
+
+{% if current_user.is_admin %}
+<div class="modal fade" id="refreshKeyModal" tabindex="-1" aria-labelledby="refreshKeyModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title" id="refreshKeyModalLabel">
+                    <i class="bi bi-exclamation-triangle-fill"></i> Refresh Fill Board Key?
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cancel"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2">
+                    You are about to generate a new key for
+                    <strong id="refreshKeyBoardName"></strong>.
+                </p>
+                <div class="alert alert-warning mb-0">
+                    <strong>Warning:</strong> This will invalidate the previous fill URL and QR code.
+                    Any devices or bookmarks using the old link will stop working until they use the new URL/QR.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="refreshKeyForm" method="POST" action="#">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-warning">
+                        <i class="bi bi-arrow-clockwise"></i> Refresh Key
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
     function syncSelectedGearTypes() {
         const hiddenInput = document.getElementById('gear_list_type_ids');
@@ -271,6 +520,31 @@
         hiddenInput.value = checkedValues.join(',');
     }
 
+    function renderFillBoardQrCodes() {
+        if (typeof QRCode === 'undefined') {
+            console.error('QRCode library failed to load');
+            return;
+        }
+        document.querySelectorAll('.fill-board-qr').forEach(function(el) {
+            const url = el.getAttribute('data-qr-url');
+            if (!url) return;
+            el.innerHTML = '';
+            try {
+                new QRCode(el, {
+                    text: url,
+                    width: 164,
+                    height: 164,
+                    colorDark: '#000000',
+                    colorLight: '#ffffff',
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+            } catch (err) {
+                console.error('QR generation failed:', err);
+                el.textContent = 'QR generation failed';
+            }
+        });
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         const gearTypeCheckboxes = document.querySelectorAll('.gear-type-checkbox');
         gearTypeCheckboxes.forEach(function(input) {
@@ -282,6 +556,21 @@
         });
         syncSelectedGearTypes();
         syncSelectedGearStatuses();
+        renderFillBoardQrCodes();
+
+        const refreshKeyModal = document.getElementById('refreshKeyModal');
+        if (refreshKeyModal) {
+            refreshKeyModal.addEventListener('show.bs.modal', function(event) {
+                const button = event.relatedTarget;
+                if (!button) return;
+                const boardName = button.getAttribute('data-board-name') || 'this board';
+                const action = button.getAttribute('data-refresh-action') || '#';
+                const nameEl = document.getElementById('refreshKeyBoardName');
+                const formEl = document.getElementById('refreshKeyForm');
+                if (nameEl) nameEl.textContent = boardName;
+                if (formEl) formEl.setAttribute('action', action);
+            });
+        }
     });
 
     function triggerScrape() {
@@ -322,4 +611,3 @@
     }
 </script>
 {% endblock %}
-

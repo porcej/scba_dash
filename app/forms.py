@@ -52,6 +52,17 @@ class ScrapeConfigForm(FlaskForm):
     gear_list_statuses = StringField('SCBA Gear List Statuses', validators=[Optional(), Length(max=255)])
 
 
+class FillSiteForm(FlaskForm):
+    """Form for creating/editing fill sites"""
+    name = StringField('Name', validators=[DataRequired(), Length(min=1, max=128)])
+
+
+class FillBoardForm(FlaskForm):
+    """Form for creating/editing fill boards"""
+    name = StringField('Name', validators=[DataRequired(), Length(min=1, max=128)])
+    fill_site_id = SelectField('Fill Site', coerce=int, validators=[DataRequired()])
+
+
 class PasswordChangeForm(FlaskForm):
     """Form for changing user password"""
     current_password = PasswordField('Current Password', validators=[DataRequired()])

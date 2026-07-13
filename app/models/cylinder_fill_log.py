@@ -16,6 +16,14 @@ class CylinderFillLog(db.Model):
     gearid = db.Column(db.Integer, db.ForeignKey("equipment.gearid"), nullable=True, index=True)
     internalid = db.Column(db.String(64), nullable=True, index=True)
 
+    fill_site_id = db.Column(
+        db.Integer, db.ForeignKey("fill_site.id"), nullable=True, index=True
+    )
+    fill_board_id = db.Column(
+        db.Integer, db.ForeignKey("fill_board.id"), nullable=True, index=True
+    )
+    fill_site_name = db.Column(db.String(128), nullable=True)
+
     filled_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 

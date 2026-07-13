@@ -13,7 +13,19 @@ from app.models.scrape_config import ScrapeConfig
 from app.models.scrape_data import ScrapeData
 from app.models.equipment import Equipment
 from app.models.cylinder_fill_log import CylinderFillLog
+from app.models.fill_site import FillSite
+from app.models.fill_board import FillBoard
 
 # Export all models for backward compatibility
-__all__ = ['User', 'Task', 'Alert', 'ScrapeConfig', 'ScrapeData', 'Equipment', 'CylinderFillLog']
+__all__ = [
+    'User',
+    'Task',
+    'Alert',
+    'ScrapeConfig',
+    'ScrapeData',
+    'Equipment',
+    'CylinderFillLog',
+    'FillSite',
+    'FillBoard',
+]
 

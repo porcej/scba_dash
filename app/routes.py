@@ -1,8 +1,8 @@
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash
 from flask_login import login_required, current_user
 from app import db, socketio
-from app.models import Task, Alert, ScrapeData, ScrapeConfig, User, Equipment, CylinderFillLog
-from app.forms import TaskForm, AlertForm, ScrapeConfigForm, PasswordChangeForm
+from app.models import Task, Alert, ScrapeData, ScrapeConfig, User, Equipment, CylinderFillLog, FillSite, FillBoard
+from app.forms import TaskForm, AlertForm, ScrapeConfigForm, PasswordChangeForm, FillSiteForm, FillBoardForm
 from app.user_forms import UserForm
 from app.admin import admin_required
 from app.socketio_events import emit_task_update, emit_alert_update, emit_scrape_update
@@ -402,7 +402,144 @@ def settings():
         config=config,
         gear_types=gear_types,
         gear_statuses=gear_statuses,
+        fill_sites=FillSite.query.order_by(FillSite.name.asc()).all(),
+        fill_boards=FillBoard.query.order_by(FillBoard.name.asc()).all(),
+        fill_site_form=FillSiteForm(),
+        fill_board_form=_fill_board_form(),
+        active_settings_tab=request.args.get('tab', 'pstrax'),
     )
+
+
+def _fill_board_form(obj=None):
+    form = FillBoardForm(obj=obj)
+    sites = FillSite.query.order_by(FillSite.name.asc()).all()
+    form.fill_site_id.choices = [(s.id, s.name) for s in sites]
+    return form
+
+
+@bp.route('/settings/fill-sites/create', methods=['POST'])
+@login_required
+@admin_required
+def create_fill_site():
+    form = FillSiteForm()
+    if form.validate_on_submit():
+        name = form.name.data.strip()
+        if FillSite.query.filter(func.lower(FillSite.name) == name.lower()).first():
+            flash(f'Fill site "{name}" already exists.', 'error')
+            return redirect(url_for('main.settings', tab='fills'))
+        db.session.add(FillSite(name=name))
+        db.session.commit()
+        flash(f'Fill site "{name}" created.', 'success')
+    else:
+        flash('Error creating fill site.', 'error')
+    return redirect(url_for('main.settings', tab='fills'))
+
+
+@bp.route('/settings/fill-sites/<int:site_id>/update', methods=['POST'])
+@login_required
+@admin_required
+def update_fill_site(site_id):
+    site = FillSite.query.get_or_404(site_id)
+    form = FillSiteForm()
+    if form.validate_on_submit():
+        name = form.name.data.strip()
+        conflict = (
+            FillSite.query
+            .filter(func.lower(FillSite.name) == name.lower(), FillSite.id != site.id)
+            .first()
+        )
+        if conflict:
+            flash(f'Fill site "{name}" already exists.', 'error')
+            return redirect(url_for('main.settings', tab='fills'))
+        site.name = name
+        db.session.commit()
+        flash(f'Fill site updated to "{name}".', 'success')
+    else:
+        flash('Error updating fill site.', 'error')
+    return redirect(url_for('main.settings', tab='fills'))
+
+
+@bp.route('/settings/fill-sites/<int:site_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_fill_site(site_id):
+    site = FillSite.query.get_or_404(site_id)
+    if site.boards.count() > 0:
+        flash(
+            f'Cannot delete fill site "{site.name}" while fill boards still use it.',
+            'error',
+        )
+        return redirect(url_for('main.settings', tab='fills'))
+    name = site.name
+    db.session.delete(site)
+    db.session.commit()
+    flash(f'Fill site "{name}" deleted.', 'success')
+    return redirect(url_for('main.settings', tab='fills'))
+
+
+@bp.route('/settings/fill-boards/create', methods=['POST'])
+@login_required
+@admin_required
+def create_fill_board():
+    form = _fill_board_form()
+    if not form.fill_site_id.choices:
+        flash('Create a fill site before adding a fill board.', 'error')
+        return redirect(url_for('main.settings', tab='fills'))
+    if form.validate_on_submit():
+        board = FillBoard(
+            name=form.name.data.strip(),
+            fill_site_id=form.fill_site_id.data,
+            key=FillBoard.generate_key(),
+        )
+        db.session.add(board)
+        db.session.commit()
+        flash(f'Fill board "{board.name}" created.', 'success')
+    else:
+        flash('Error creating fill board.', 'error')
+    return redirect(url_for('main.settings', tab='fills'))
+
+
+@bp.route('/settings/fill-boards/<int:board_id>/update', methods=['POST'])
+@login_required
+@admin_required
+def update_fill_board(board_id):
+    board = FillBoard.query.get_or_404(board_id)
+    form = _fill_board_form()
+    if form.validate_on_submit():
+        board.name = form.name.data.strip()
+        board.fill_site_id = form.fill_site_id.data
+        db.session.commit()
+        flash(f'Fill board "{board.name}" updated.', 'success')
+    else:
+        flash('Error updating fill board.', 'error')
+    return redirect(url_for('main.settings', tab='fills'))
+
+
+@bp.route('/settings/fill-boards/<int:board_id>/regenerate-key', methods=['POST'])
+@login_required
+@admin_required
+def regenerate_fill_board_key(board_id):
+    board = FillBoard.query.get_or_404(board_id)
+    board.regenerate_key()
+    db.session.commit()
+    flash(f'Key regenerated for fill board "{board.name}".', 'success')
+    return redirect(url_for('main.settings', tab='fills'))
+
+
+@bp.route('/settings/fill-boards/<int:board_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_fill_board(board_id):
+    board = FillBoard.query.get_or_404(board_id)
+    name = board.name
+    CylinderFillLog.query.filter_by(fill_board_id=board.id).update(
+        {CylinderFillLog.fill_board_id: None},
+        synchronize_session=False,
+    )
+    db.session.delete(board)
+    db.session.commit()
+    flash(f'Fill board "{name}" deleted.', 'success')
+    return redirect(url_for('main.settings', tab='fills'))
 
 
 @bp.route('/settings/update', methods=['POST'])
@@ -518,8 +655,15 @@ def update_password():
 
 
 @bp.route('/fills')
-def public_fills():
+@bp.route('/fills/<string:board_key>')
+def public_fills(board_key=None):
     """Public iPad-friendly page to log SCBA cylinder fills."""
+    fill_board = None
+    fill_site_name = None
+    if board_key:
+        fill_board = FillBoard.query.filter_by(key=board_key).first_or_404()
+        fill_site_name = fill_board.fill_site.name if fill_board.fill_site else None
+
     cylinders = (
         Equipment.query.filter(Equipment.geartypeid == 11)
         .order_by(Equipment.internalid.asc())
@@ -538,7 +682,18 @@ def public_fills():
         for c in cylinders
         if c.internalid
     ]
-    return render_template('fills_public.html', cylinders_json=json.dumps(data))
+    page_title = (
+        f"SCBA Cylinder Fill Log for {fill_site_name}"
+        if fill_site_name
+        else "SCBA Cylinder Fill Log"
+    )
+    return render_template(
+        'fills_public.html',
+        cylinders_json=json.dumps(data),
+        page_title=page_title,
+        fill_site_name=fill_site_name,
+        board_key=fill_board.key if fill_board else None,
+    )
 
 
 @bp.route('/api/fills/log', methods=['POST'])
@@ -552,6 +707,17 @@ def public_log_fills():
     internalids = [str(x).strip() for x in internalids if str(x).strip()]
     if not internalids:
         return jsonify({"success": False, "error": "No cylinders provided"}), 400
+
+    board_key = (payload.get("board_key") or "").strip() or None
+    fill_board = None
+    fill_site = None
+    fill_site_name = None
+    if board_key:
+        fill_board = FillBoard.query.filter_by(key=board_key).first()
+        if not fill_board:
+            return jsonify({"success": False, "error": "Invalid fill board key"}), 400
+        fill_site = fill_board.fill_site
+        fill_site_name = fill_site.name if fill_site else None
 
     batch_id = str(uuid.uuid4())
     now = datetime.utcnow()
@@ -570,6 +736,9 @@ def public_log_fills():
                 batch_id=batch_id,
                 gearid=eq.gearid if eq else None,
                 internalid=iid,
+                fill_site_id=fill_site.id if fill_site else None,
+                fill_board_id=fill_board.id if fill_board else None,
+                fill_site_name=fill_site_name,
                 filled_at=now,
                 created_at=now,
             )
@@ -577,7 +746,13 @@ def public_log_fills():
         created += 1
 
     db.session.commit()
-    return jsonify({"success": True, "batch_id": batch_id, "created": created, "filled_at": now.isoformat()})
+    return jsonify({
+        "success": True,
+        "batch_id": batch_id,
+        "created": created,
+        "filled_at": now.isoformat(),
+        "fill_site": fill_site_name,
+    })
 
 
 # API Routes

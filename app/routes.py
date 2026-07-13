@@ -9,6 +9,7 @@ from app.socketio_events import emit_task_update, emit_alert_update, emit_scrape
 from app.tasks import update_scrape_schedule, update_equipment_scrape_schedule
 from app.scraper import perform_scrape as run_scrape
 from app.scraper import perform_equipment_scrape as run_equipment_scrape
+from app.scraper import perform_pstrax_batch_air_fill
 from datetime import datetime
 import json
 import uuid
@@ -729,8 +730,11 @@ def public_log_fills():
     by_internal = {str(e.internalid).strip(): e for e in equipment_rows if e.internalid}
 
     created = 0
+    gear_ids = []
     for iid in internalids:
         eq = by_internal.get(iid)
+        if eq and eq.gearid is not None:
+            gear_ids.append(eq.gearid)
         db.session.add(
             CylinderFillLog(
                 batch_id=batch_id,
@@ -746,12 +750,39 @@ def public_log_fills():
         created += 1
 
     db.session.commit()
+
+    pstrax_result = None
+    if board_key and fill_site_name:
+        unique_gear_ids = []
+        seen = set()
+        for gid in gear_ids:
+            if gid in seen:
+                continue
+            seen.add(gid)
+            unique_gear_ids.append(gid)
+        if not unique_gear_ids:
+            pstrax_result = {
+                'success': False,
+                'error': 'No gear IDs found for submitted cylinders',
+            }
+        else:
+            try:
+                pstrax_result = perform_pstrax_batch_air_fill(
+                    unique_gear_ids, fill_site_name
+                )
+            except Exception as e:
+                pstrax_result = {
+                    'success': False,
+                    'error': f'Unexpected PSTrax sync error: {e}',
+                }
+
     return jsonify({
         "success": True,
         "batch_id": batch_id,
         "created": created,
         "filled_at": now.isoformat(),
         "fill_site": fill_site_name,
+        "pstrax": pstrax_result,
     })
 
 

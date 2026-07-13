@@ -272,6 +272,266 @@ class PstraxScraper:
         )
         
         return response
+
+    def post_batch_air_fill(self, gear_ids, fill_site_name, base_url='https://app1.pstrax.com'):
+        """
+        Log a batch cylinder air fill in PSTrax.
+
+        Flow:
+        1) POST selected gear ids to modal-add-airFill-batch-log.php
+        2) GET/parse the batch fill form HTML
+        3) Set fill location, backdate, and chkcontroller_1 checkboxes
+        4) POST completed form to post-modal-add-airfill-batch-log.php
+        """
+        if not gear_ids:
+            return {'success': False, 'error': 'No gear IDs provided'}
+
+        base = (base_url or 'https://app1.pstrax.com').rstrip('/')
+        modal_url = f'{base}/scba/modal-add-airFill-batch-log.php'
+        submit_url = f'{base}/scba/post-modal-add-airfill-batch-log.php'
+        fill_site_name = (fill_site_name or '').strip()
+        if not fill_site_name:
+            return {'success': False, 'error': 'Fill site name is required'}
+
+        headers = {
+            'Referer': base + '/',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        }
+
+        id_pairs = [('id[]', str(gid)) for gid in gear_ids if gid is not None]
+        if not id_pairs:
+            return {'success': False, 'error': 'No valid gear IDs provided'}
+
+        try:
+            post_modal_resp = self.session.post(
+                modal_url, data=id_pairs, timeout=60, allow_redirects=True, headers=headers
+            )
+        except requests.RequestException as e:
+            return {'success': False, 'error': f'Failed posting gear IDs to PSTrax modal: {e}'}
+
+        if post_modal_resp.status_code != 200:
+            return {
+                'success': False,
+                'error': f'PSTrax modal POST returned HTTP {post_modal_resp.status_code}',
+            }
+        if 'login' in (post_modal_resp.url or '').lower() or 'pstrax - login' in (post_modal_resp.text or '').lower():
+            return {'success': False, 'error': 'PSTrax session expired during air-fill modal POST'}
+
+        try:
+            get_modal_resp = self.session.get(
+                modal_url, timeout=60, allow_redirects=True, headers={
+                    'Referer': base + '/',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                }
+            )
+        except requests.RequestException as e:
+            return {'success': False, 'error': f'Failed loading PSTrax air-fill modal: {e}'}
+
+        html = get_modal_resp.text if get_modal_resp.status_code == 200 else ''
+        soup = BeautifulSoup(html or '', 'html.parser')
+        form = soup.find('form', {'id': 'batchFillForm'}) or soup.find('form', {'name': 'frmLogApp'})
+
+        # Prefer GET HTML; fall back to POST response if GET did not include the form/ids.
+        if not form or not form.find('input', {'name': 'id[]'}):
+            soup = BeautifulSoup(post_modal_resp.text or '', 'html.parser')
+            form = soup.find('form', {'id': 'batchFillForm'}) or soup.find('form', {'name': 'frmLogApp'})
+
+        if not form:
+            return {'success': False, 'error': 'PSTrax batch fill form not found in modal response'}
+
+        now_local = datetime.now()
+        backdate = now_local.strftime('%m/%d/%Y')
+        posted_dt = now_local.strftime('%Y-%m-%d %H:%M:%S')
+        backtime = now_local.strftime('%H:%M')
+
+        location_select = (
+            form.find('select', {'id': 'notes_464998'})
+            or form.find('select', {'name': 'Comments_464998_0'})
+        )
+        if location_select is None:
+            return {'success': False, 'error': 'Fill location select (notes_464998) not found'}
+
+        option_values = [
+            (opt.get('value') or '').strip()
+            for opt in location_select.find_all('option')
+            if (opt.get('value') or '').strip()
+        ]
+        matched_site = None
+        for value in option_values:
+            if value.lower() == fill_site_name.lower():
+                matched_site = value
+                break
+        if matched_site is None:
+            return {
+                'success': False,
+                'error': (
+                    f'Fill site "{fill_site_name}" not found in PSTrax location options: '
+                    f'{", ".join(option_values) if option_values else "(none)"}'
+                ),
+            }
+
+        # Mark selected option in parsed HTML (also set explicitly when building payload).
+        for opt in location_select.find_all('option'):
+            if (opt.get('value') or '').strip() == matched_site:
+                opt['selected'] = 'selected'
+            elif opt.has_attr('selected'):
+                del opt['selected']
+
+        backdate_input = form.find('input', {'name': 'backdate'})
+        if backdate_input is not None:
+            backdate_input['value'] = backdate
+
+        for name, value in (
+            ('txtposteddatetime', posted_dt),
+            ('backtime', backtime),
+        ):
+            hidden = form.find('input', {'name': name})
+            if hidden is not None:
+                hidden['value'] = value
+
+        for chk in form.select('input.chkcontroller_1[type="checkbox"]'):
+            chk['checked'] = 'checked'
+
+        payload = []
+        seen_names = set()
+
+        def append_field(name, value):
+            if not name:
+                return
+            payload.append((name, '' if value is None else str(value)))
+            seen_names.add(name)
+
+        # Preserve existing hidden id[] values if present; otherwise use requested gear ids.
+        existing_ids = [inp.get('value') for inp in form.find_all('input', {'name': 'id[]'})]
+        if existing_ids:
+            for gid in existing_ids:
+                if gid is not None and str(gid).strip():
+                    append_field('id[]', str(gid).strip())
+        else:
+            for name, value in id_pairs:
+                append_field(name, value)
+
+        for el in form.find_all(['input', 'select', 'textarea']):
+            name = el.get('name')
+            if not name or name == 'id[]':
+                continue
+
+            tag = el.name.lower()
+            if tag == 'input':
+                itype = (el.get('type') or 'text').lower()
+                if itype in ('button', 'submit', 'image', 'reset', 'file'):
+                    # Keep explicit submit markers used by PSTrax.
+                    if name in ('btnsubmit',) or itype == 'submit':
+                        append_field(name, el.get('value') or 'LOG EVENT')
+                    continue
+                if itype in ('checkbox', 'radio'):
+                    classes = el.get('class') or []
+                    is_checked = el.has_attr('checked') or 'chkcontroller_1' in classes
+                    if is_checked:
+                        append_field(name, el.get('value') or 'on')
+                    continue
+                value = el.get('value') or ''
+                if name == 'backdate':
+                    value = backdate
+                elif name == 'txtposteddatetime':
+                    value = posted_dt
+                elif name == 'backtime':
+                    value = backtime
+                append_field(name, value)
+            elif tag == 'select':
+                if el.get('id') == 'notes_464998' or name == 'Comments_464998_0':
+                    append_field(name, matched_site)
+                    continue
+                selected = el.find('option', selected=True)
+                if selected is None:
+                    selected = el.find('option')
+                append_field(name, selected.get('value') if selected else '')
+            elif tag == 'textarea':
+                append_field(name, el.get_text() or el.get('value') or '')
+
+        # Ensure required fields exist even if missing from parsed markup.
+        if 'backdate' not in seen_names:
+            append_field('backdate', backdate)
+        if 'Comments_464998_0' not in seen_names:
+            append_field('Comments_464998_0', matched_site)
+        if 'btnsubmit' not in seen_names:
+            append_field('btnsubmit', 'LOG EVENT')
+
+        csrf_token = None
+        csrf_input = form.find('input', {'name': '_token'}) or form.find('input', {'id': 'csrf_token'})
+        if csrf_input is not None:
+            csrf_token = csrf_input.get('value')
+        submit_headers = {
+            'Referer': modal_url,
+            'Accept': 'application/json, text/javascript, */*; q=0.01',
+            'X-Requested-With': 'XMLHttpRequest',
+        }
+        if csrf_token:
+            submit_headers['X-CSRF-TOKEN'] = csrf_token
+
+        try:
+            submit_resp = self.session.post(
+                submit_url,
+                data=payload,
+                timeout=60,
+                allow_redirects=True,
+                headers=submit_headers,
+            )
+        except requests.RequestException as e:
+            return {'success': False, 'error': f'Failed submitting PSTrax air-fill form: {e}'}
+
+        if submit_resp.status_code != 200:
+            return {
+                'success': False,
+                'error': f'PSTrax air-fill submit returned HTTP {submit_resp.status_code}',
+                'response_preview': (submit_resp.text or '')[:500],
+            }
+        if 'login' in (submit_resp.url or '').lower() or 'pstrax - login' in (submit_resp.text or '').lower():
+            return {'success': False, 'error': 'PSTrax session expired during air-fill submit'}
+
+        parsed = None
+        try:
+            parsed = submit_resp.json()
+        except (ValueError, json.JSONDecodeError):
+            try:
+                parsed = json.loads(submit_resp.text)
+            except (ValueError, json.JSONDecodeError):
+                parsed = None
+
+        if isinstance(parsed, dict):
+            status = parsed.get('status')
+            result = None
+            data = parsed.get('data')
+            if isinstance(data, dict):
+                result = data.get('result')
+            if status in (200, '200') or (isinstance(result, str) and result.lower() == 'logged'):
+                return {
+                    'success': True,
+                    'fill_site': matched_site,
+                    'gear_ids': [str(g) for g in gear_ids],
+                    'response': parsed,
+                }
+            return {
+                'success': False,
+                'error': f'PSTrax air-fill submit returned unexpected payload: {parsed}',
+            }
+
+        # Some PSTrax installs return non-JSON success bodies.
+        body = (submit_resp.text or '').lower()
+        if 'logged' in body or 'success' in body:
+            return {
+                'success': True,
+                'fill_site': matched_site,
+                'gear_ids': [str(g) for g in gear_ids],
+                'response_preview': (submit_resp.text or '')[:300],
+            }
+
+        return {
+            'success': False,
+            'error': 'PSTrax air-fill submit did not return a recognizable success response',
+            'response_preview': (submit_resp.text or '')[:500],
+        }
     
     def _find_alerts_link(self, html_content, base_url, current_url):
         """Find alerts page link in HTML content"""
@@ -626,3 +886,40 @@ def perform_equipment_scrape():
         print(f"Equipment scrape completed: {len(rows)} rows stored")
         from app.socketio_events import emit_equipment_updated
         emit_equipment_updated()
+
+
+def perform_pstrax_batch_air_fill(gear_ids, fill_site_name):
+    """Login to PSTrax and submit a batch air-fill log for the given gear IDs."""
+    config = ScrapeConfig.query.first()
+    if not config or not config.pstrax_username or not config.pstrax_password_encrypted:
+        return {'success': False, 'error': 'PSTrax credentials are not configured'}
+
+    password = config.get_password()
+    if not password:
+        return {'success': False, 'error': 'Could not decrypt PSTrax password'}
+
+    base_url = config.pstrax_base_url or 'https://app1.pstrax.com'
+    scraper = PstraxScraper()
+    login_success, login_result = scraper.login(
+        config.pstrax_username, password, base_url=base_url
+    )
+    if not login_success:
+        return {
+            'success': False,
+            'error': 'PSTrax login failed',
+            'details': login_result or {},
+        }
+
+    result = scraper.post_batch_air_fill(
+        gear_ids=gear_ids,
+        fill_site_name=fill_site_name,
+        base_url=base_url,
+    )
+    if result.get('success'):
+        print(
+            f"PSTrax batch air fill logged for site={fill_site_name} "
+            f"gear_ids={list(gear_ids)}"
+        )
+    else:
+        print(f"PSTrax batch air fill failed: {result.get('error')}")
+    return result

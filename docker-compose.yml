@@ -10,6 +10,8 @@ services:
       - DATABASE_URL=${DATABASE_URL:-sqlite:////app/data/scba_dash.db}
       - SOCKETIO_ASYNC_MODE=gevent
       - SCRAPE_INTERVAL_MINUTES=${SCRAPE_INTERVAL_MINUTES:-15}
+      - TZ=${TZ:-America/New_York}
+      - APP_TIMEZONE=${APP_TIMEZONE:-America/New_York}
     # env_file:
     #   - .env  # Optional: load from .env file if it exists
     volumes:

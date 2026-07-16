@@ -309,6 +309,13 @@
             }[c]));
         }
 
+        function clearCylinderInput() {
+            const inp = document.getElementById('cylInput');
+            if (!inp) return;
+            inp.value = '';
+            applyTableFilter();
+        }
+
         function toggleSelect(internalid) {
             const id = String(internalid).trim();
             const row = CYLINDERS.find(x => x.internalid === id);
@@ -325,7 +332,10 @@
                 return;
             }
             if (selected.has(id)) selected.delete(id);
-            else selected.set(id, row);
+            else {
+                selected.set(id, row);
+                clearCylinderInput();
+            }
             syncTableChecks();
             renderSelected();
             // Due within 6 months: allow selection but show a blocking notice.
@@ -366,6 +376,7 @@
                 selected.set(id, row);
                 syncTableChecks();
                 renderSelected();
+                clearCylinderInput();
             }
             hideOverdueModal();
         }
@@ -441,8 +452,6 @@
                 return;
             }
             toggleSelect(raw);
-            inp.value = '';
-            applyTableFilter();
             inp.focus();
         }
 
@@ -481,6 +490,7 @@
                         selected.clear();
                         syncTableChecks();
                         renderSelected();
+                        clearCylinderInput();
                         return;
                     }
                 }
@@ -488,6 +498,7 @@
                 selected.clear();
                 syncTableChecks();
                 renderSelected();
+                clearCylinderInput();
             } catch (e) {
                 flash('Network error logging fills', 'danger');
                 btn.disabled = false;

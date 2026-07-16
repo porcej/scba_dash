@@ -596,19 +596,6 @@
                     return;
                 }
                 let msg = `Logged ${data.created} fill(s).`;
-                if (data.pstrax) {
-                    if (data.pstrax.success) {
-                        msg += ' Synced to PSTrax.';
-                    } else {
-                        msg += ` Local log saved, but PSTrax sync failed: ${data.pstrax.error || 'unknown error'}`;
-                        flash(msg, 'warning');
-                        selected.clear();
-                        syncTableChecks();
-                        renderSelected();
-                        clearCylinderInput();
-                        return;
-                    }
-                }
                 flash(msg, 'success');
                 selected.clear();
                 syncTableChecks();

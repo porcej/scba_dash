@@ -9,7 +9,7 @@ from app.socketio_events import emit_task_update, emit_alert_update, emit_scrape
 from app.tasks import update_scrape_schedule, update_equipment_scrape_schedule
 from app.scraper import perform_scrape as run_scrape
 from app.scraper import perform_equipment_scrape as run_equipment_scrape
-from app.scraper import perform_pstrax_batch_air_fill
+from app.fill_sync import enqueue_fill_batch_sync
 from app.timezone_utils import local_now, normalize_timezone_name
 from datetime import datetime, date
 import json
@@ -767,7 +767,6 @@ def public_log_fills():
             "error": "Badge number is required and must be exactly 4 digits",
         }), 400
     badge_number = badge_digits.zfill(4)
-    fill_notes = f"Filled by {badge_number}"
 
     batch_id = str(uuid.uuid4())
     now = datetime.utcnow()
@@ -798,11 +797,14 @@ def public_log_fills():
             }), 400
 
     created = 0
-    gear_ids = []
+    needs_pstrax = bool(board_key and fill_site_name)
+    pstrax_status = (
+        CylinderFillLog.STATUS_PENDING
+        if needs_pstrax
+        else CylinderFillLog.STATUS_LOCAL_ONLY
+    )
     for iid in internalids:
         eq = by_internal.get(iid)
-        if eq and eq.gearid is not None:
-            gear_ids.append(eq.gearid)
         db.session.add(
             CylinderFillLog(
                 batch_id=batch_id,
@@ -811,6 +813,8 @@ def public_log_fills():
                 fill_site_id=fill_site.id if fill_site else None,
                 fill_board_id=fill_board.id if fill_board else None,
                 fill_site_name=fill_site_name,
+                badge_number=badge_number,
+                pstrax_status=pstrax_status,
                 filled_at=now,
                 created_at=now,
             )
@@ -819,30 +823,8 @@ def public_log_fills():
 
     db.session.commit()
 
-    pstrax_result = None
-    if board_key and fill_site_name:
-        unique_gear_ids = []
-        seen = set()
-        for gid in gear_ids:
-            if gid in seen:
-                continue
-            seen.add(gid)
-            unique_gear_ids.append(gid)
-        if not unique_gear_ids:
-            pstrax_result = {
-                'success': False,
-                'error': 'No gear IDs found for submitted cylinders',
-            }
-        else:
-            try:
-                pstrax_result = perform_pstrax_batch_air_fill(
-                    unique_gear_ids, fill_site_name, notes=fill_notes
-                )
-            except Exception as e:
-                pstrax_result = {
-                    'success': False,
-                    'error': f'Unexpected PSTrax sync error: {e}',
-                }
+    if needs_pstrax:
+        enqueue_fill_batch_sync(batch_id)
 
     return jsonify({
         "success": True,
@@ -851,7 +833,7 @@ def public_log_fills():
         "filled_at": now.isoformat(),
         "fill_site": fill_site_name,
         "badge_number": badge_number,
-        "pstrax": pstrax_result,
+        "pstrax_queued": needs_pstrax,
     })
 
 

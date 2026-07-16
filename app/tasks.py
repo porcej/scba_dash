@@ -6,6 +6,7 @@ from app.models import Alert, ScrapeConfig
 from app.scraper import perform_scrape, perform_equipment_scrape
 from app.socketio_events import emit_alert_update
 from app.timezone_utils import local_now
+from app.fill_sync import sync_pending_fill_batches
 import atexit
 
 # Global scheduler
@@ -112,6 +113,16 @@ def start_background_tasks(app):
             id='scheduled_equipment_scrape',
             name='Scheduled equipment scrape',
             replace_existing=True
+        )
+
+        scheduler.add_job(
+            func=sync_pending_fill_batches,
+            trigger=IntervalTrigger(minutes=1),
+            id='sync_pending_fill_batches',
+            name='Sync pending fill batches to PSTrax',
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
         )
 
         scheduler.start()

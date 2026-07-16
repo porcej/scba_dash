@@ -1,29 +1,15 @@
-import os
 import requests
 import json
 import re
 from urllib.parse import urlparse, urljoin, quote
 from bs4 import BeautifulSoup
 from datetime import datetime
-from zoneinfo import ZoneInfo
 from app import db
 from sqlalchemy import func, text
 
 from app.models import ScrapeConfig, ScrapeData, Equipment
 from app.socketio_events import emit_scrape_update
-
-
-def _local_now():
-    """Current time in the app timezone (not container UTC)."""
-    tz_name = (
-        os.environ.get('APP_TIMEZONE')
-        or os.environ.get('TZ')
-        or 'America/New_York'
-    )
-    try:
-        return datetime.now(ZoneInfo(tz_name))
-    except Exception:
-        return datetime.now(ZoneInfo('America/New_York'))
+from app.timezone_utils import local_now
 
 
 class PstraxScraper:
@@ -355,7 +341,7 @@ class PstraxScraper:
         if not form:
             return {'success': False, 'error': 'PSTrax batch fill form not found in modal response'}
 
-        now_local = _local_now()
+        now_local = local_now()
         backdate = now_local.strftime('%m/%d/%Y')
         posted_dt = now_local.strftime('%Y-%m-%d %H:%M:%S')
         backtime = now_local.strftime('%H:%M')

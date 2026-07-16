@@ -62,6 +62,13 @@ def create_app(config_class=Config):
     
     # Import SocketIO event handlers
     import app.socketio_events  # noqa: F401
+
+    from app.timezone_utils import format_local
+
+    @flask_app.template_filter('localtime')
+    def localtime_filter(value, fmt='%Y-%m-%d %H:%M'):
+        """Format a UTC/naive datetime in the configured app timezone."""
+        return format_local(value, fmt=fmt)
     
     # Create database tables (will be created when first accessed with app context)
     # Background tasks will be started in run.py

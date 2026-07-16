@@ -20,6 +20,7 @@ class ScrapeConfig(db.Model):
     alerts_font_size = db.Column(db.Integer, default=16, nullable=False)  # pixels
     gear_list_type_ids = db.Column(db.String(255), default='11', nullable=False)
     gear_list_statuses = db.Column(db.String(255), default='Active', nullable=False)
+    app_timezone = db.Column(db.String(64), default='America/New_York', nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     @staticmethod
@@ -67,6 +68,11 @@ class ScrapeConfig(db.Model):
             return int(self.alerts_font_size or 16)
         except (TypeError, ValueError):
             return 16
+
+    def get_app_timezone(self):
+        from app.timezone_utils import normalize_timezone_name
+
+        return normalize_timezone_name(self.app_timezone or 'America/New_York')
 
     def get_gear_list_type_ids(self):
         """Return configured gear type IDs as a normalized int list."""

@@ -10,6 +10,7 @@ from app.tasks import update_scrape_schedule, update_equipment_scrape_schedule
 from app.scraper import perform_scrape as run_scrape
 from app.scraper import perform_equipment_scrape as run_equipment_scrape
 from app.scraper import perform_pstrax_batch_air_fill
+from app.timezone_utils import local_now, normalize_timezone_name
 from datetime import datetime
 import json
 import uuid
@@ -238,8 +239,8 @@ def create_alert():
             created_by=current_user.id,
             color_theme=(form.color_theme.data or default_color).lower()
         )
-        # Normalize activation against current local time
-        now = datetime.now()
+        # Normalize activation against configured app timezone wall-clock
+        now = local_now().replace(tzinfo=None)
 
         # If no start_time, activate immediately
         if not alert.start_time:
@@ -276,7 +277,7 @@ def edit_alert(alert_id):
         alert.end_time = form.end_time.data
         alert.color_theme = (form.color_theme.data or default_color).lower()
         
-        now = datetime.now()
+        now = local_now().replace(tzinfo=None)
 
         # Recalculate is_active status
         if not alert.start_time:
@@ -331,6 +332,7 @@ def settings():
     )
     form.default_alert_color.data = config.get_default_alert_color()
     form.alerts_font_size.data = config.get_alert_font_size()
+    form.app_timezone.data = config.get_app_timezone()
     form.gear_list_type_ids.data = config.gear_list_type_ids or '11'
     form.gear_list_statuses.data = config.gear_list_statuses or 'Active'
 
@@ -588,6 +590,9 @@ def update_settings():
             config.alerts_font_size = int(form.alerts_font_size.data)
         else:
             config.alerts_font_size = 16
+        config.app_timezone = normalize_timezone_name(
+            form.app_timezone.data or 'America/New_York'
+        )
         config.set_gear_list_type_ids(form.gear_list_type_ids.data)
         config.set_gear_list_statuses(form.gear_list_statuses.data)
         
@@ -608,12 +613,15 @@ def inject_alert_settings():
     config = ScrapeConfig.query.first()
     default_color = 'danger'
     font_size = 16
+    timezone_name = 'America/New_York'
     if config:
         default_color = config.get_default_alert_color()
         font_size = config.get_alert_font_size()
+        timezone_name = config.get_app_timezone()
     return {
         'default_alert_color': default_color,
-        'alerts_font_size_px': font_size
+        'alerts_font_size_px': font_size,
+        'app_timezone': timezone_name,
     }
 
 

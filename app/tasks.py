@@ -5,6 +5,7 @@ from app import db
 from app.models import Alert, ScrapeConfig
 from app.scraper import perform_scrape, perform_equipment_scrape
 from app.socketio_events import emit_alert_update
+from app.timezone_utils import local_now
 import atexit
 
 # Global scheduler
@@ -21,7 +22,7 @@ def check_alerts():
         return
     try:
         with _app.app_context():
-            now = datetime.now()
+            now = local_now().replace(tzinfo=None)
             
             # Get all alerts
             alerts = Alert.query.all()

@@ -76,9 +76,9 @@
                                 <span class="badge {% if task.priority == 1 %}bg-danger{% elif task.priority == 2 %}bg-warning{% else %}bg-secondary{% endif %}">
                                     {{ task.get_priority_label() }}
                                 </span>
-                                | Created: {{ task.created_at.strftime('%Y-%m-%d %H:%M') }}
+                                | Created: {{ task.created_at|localtime }}
                                 {% if task.updated_at != task.created_at %}
-                                    | Updated: {{ task.updated_at.strftime('%Y-%m-%d %H:%M') }}
+                                    | Updated: {{ task.updated_at|localtime }}
                                 {% endif %}
                             </small>
                         </div>

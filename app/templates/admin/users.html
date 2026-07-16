@@ -84,7 +84,7 @@
                                         <span class="badge bg-secondary">User</span>
                                     {% endif %}
                                 </td>
-                                <td>{{ user.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td>{{ user.created_at|localtime }}</td>
                                 <td>
                                     <div class="btn-group" role="group">
                                         {% if user.id != current_user.id %}

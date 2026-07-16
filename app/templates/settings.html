@@ -228,6 +228,18 @@
                                 {% endif %}
                                 <small class="form-text text-muted">Set the font size (in pixels) for alerts displayed on the dashboard.</small>
                             </div>
+                            <div class="mb-3">
+                                {{ form.app_timezone.label(class="form-label") }}
+                                {{ form.app_timezone(class="form-select", disabled=(not current_user.is_admin)) }}
+                                {% if form.app_timezone.errors %}
+                                    <div class="text-danger small">
+                                        {% for error in form.app_timezone.errors %}
+                                            <div>{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                                <small class="form-text text-muted">Used for SCBA fill times sent to PSTrax and for displaying times throughout the app (current: {{ app_timezone }}).</small>
+                            </div>
                             {% if current_user.is_admin %}
                             <button type="submit" class="btn btn-primary">
                                 <i class="bi bi-save"></i> Save Settings
@@ -251,7 +263,7 @@
                 <div class="card mt-3">
                     <div class="card-body">
                         <h6>Last alerts scrape</h6>
-                        <p class="text-muted mb-0">{{ config.last_scrape.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+                        <p class="text-muted mb-0">{{ config.last_scrape|localtime('%Y-%m-%d %H:%M:%S') }} ({{ app_timezone }})</p>
                     </div>
                 </div>
                 {% endif %}
@@ -259,7 +271,7 @@
                 <div class="card mt-3">
                     <div class="card-body">
                         <h6>Last equipment sync</h6>
-                        <p class="text-muted mb-0">{{ config.last_equipment_scrape.strftime('%Y-%m-%d %H:%M:%S') }} UTC</p>
+                        <p class="text-muted mb-0">{{ config.last_equipment_scrape|localtime('%Y-%m-%d %H:%M:%S') }} ({{ app_timezone }})</p>
                     </div>
                 </div>
                 {% endif %}

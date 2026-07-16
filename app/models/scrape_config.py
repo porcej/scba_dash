@@ -21,6 +21,7 @@ class ScrapeConfig(db.Model):
     gear_list_type_ids = db.Column(db.String(255), default='11', nullable=False)
     gear_list_statuses = db.Column(db.String(255), default='Active', nullable=False)
     app_timezone = db.Column(db.String(64), default='America/New_York', nullable=False)
+    allow_out_of_hydro_fills = db.Column(db.Boolean, default=False, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     @staticmethod
@@ -73,6 +74,9 @@ class ScrapeConfig(db.Model):
         from app.timezone_utils import normalize_timezone_name
 
         return normalize_timezone_name(self.app_timezone or 'America/New_York')
+
+    def get_allow_out_of_hydro_fills(self):
+        return bool(self.allow_out_of_hydro_fills)
 
     def get_gear_list_type_ids(self):
         """Return configured gear type IDs as a normalized int list."""

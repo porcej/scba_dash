@@ -240,6 +240,16 @@
                                 {% endif %}
                                 <small class="form-text text-muted">Used for SCBA fill times sent to PSTrax and for displaying times throughout the app (current: {{ app_timezone }}).</small>
                             </div>
+                            <hr class="my-4">
+                            <h5 class="mb-3"><i class="bi bi-shield-exclamation"></i> Fill Policy</h5>
+                            <div class="mb-3 form-check">
+                                {{ form.allow_out_of_hydro_fills(class="form-check-input", disabled=(not current_user.is_admin), id="allow_out_of_hydro_fills") }}
+                                {{ form.allow_out_of_hydro_fills.label(class="form-check-label", for="allow_out_of_hydro_fills") }}
+                                <div class="form-text text-muted">
+                                    When enabled, fill pages show an option to fill cylinders that are past their hydro date.
+                                    When disabled, overdue cylinders can only be acknowledged and cannot be selected for filling.
+                                </div>
+                            </div>
                             {% if current_user.is_admin %}
                             <button type="submit" class="btn btn-primary">
                                 <i class="bi bi-save"></i> Save Settings

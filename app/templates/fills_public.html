@@ -238,7 +238,12 @@
             <div class="do-not-fill">DO NOT FILL</div>
             <div class="d-grid gap-2">
                 <button type="button" class="btn btn-light btn-ack" id="overdueAck">Acknowledge</button>
-                <button type="button" class="btn btn-dark btn-ack" id="overdueFillAnyway">I understand the risks and will fill anyway.</button>
+                <button type="button"
+                        class="btn btn-dark btn-ack"
+                        id="overdueFillAnyway"
+                        {% if not allow_out_of_hydro_fills %}hidden disabled aria-hidden="true"{% endif %}>
+                    I understand the risks and will fill anyway.
+                </button>
             </div>
         </div>
     </div>
@@ -277,6 +282,7 @@
         const CYLINDERS = JSON.parse(document.getElementById('cylindersData').textContent);
         const boardKey = {{ (board_key or '') | tojson }};
         const fillSiteName = {{ (fill_site_name or '') | tojson }};
+        const allowOutOfHydroFills = {{ (allow_out_of_hydro_fills or false) | tojson }};
 
         function getCSRFToken() {
             const metaTag = document.querySelector('meta[name="csrf-token"]');
@@ -426,6 +432,10 @@
         }
 
         function fillAnywayOverdue() {
+            if (!allowOutOfHydroFills) {
+                hideOverdueModal();
+                return;
+            }
             const id = pendingOverdueInternalId;
             if (!id) {
                 hideOverdueModal();
@@ -659,7 +669,16 @@
             }
             const fillAnyway = document.getElementById('overdueFillAnyway');
             if (fillAnyway) {
-                fillAnyway.addEventListener('click', fillAnywayOverdue);
+                if (allowOutOfHydroFills) {
+                    fillAnyway.hidden = false;
+                    fillAnyway.disabled = false;
+                    fillAnyway.setAttribute('aria-hidden', 'false');
+                    fillAnyway.addEventListener('click', fillAnywayOverdue);
+                } else {
+                    fillAnyway.hidden = true;
+                    fillAnyway.disabled = true;
+                    fillAnyway.setAttribute('aria-hidden', 'true');
+                }
             }
             const warningOk = document.getElementById('warningOk');
             if (warningOk) {

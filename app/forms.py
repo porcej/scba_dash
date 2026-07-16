@@ -57,6 +57,10 @@ class ScrapeConfigForm(FlaskForm):
     )
     gear_list_type_ids = StringField('SCBA Gear List Type IDs', validators=[Optional(), Length(max=255)])
     gear_list_statuses = StringField('SCBA Gear List Statuses', validators=[Optional(), Length(max=255)])
+    allow_out_of_hydro_fills = BooleanField(
+        'Allow filling cylinders that are out of hydro',
+        default=False,
+    )
 
 
 class FillSiteForm(FlaskForm):

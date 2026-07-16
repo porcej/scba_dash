@@ -11,12 +11,36 @@ from app.scraper import perform_scrape as run_scrape
 from app.scraper import perform_equipment_scrape as run_equipment_scrape
 from app.scraper import perform_pstrax_batch_air_fill
 from app.timezone_utils import local_now, normalize_timezone_name
-from datetime import datetime
+from datetime import datetime, date
 import json
 import uuid
 from sqlalchemy import func
 
 bp = Blueprint('main', __name__)
+
+
+def _parse_mdy_date(value):
+    """Parse mm/dd/yyyy (or m/d/yyyy) into a date, or None."""
+    if not value:
+        return None
+    text = str(value).strip()
+    parts = text.split('/')
+    if len(parts) != 3:
+        return None
+    try:
+        month = int(parts[0])
+        day = int(parts[1])
+        year = int(parts[2])
+        return date(year, month, day)
+    except (TypeError, ValueError):
+        return None
+
+
+def _is_hydro_overdue(next_hydro):
+    hydro_date = _parse_mdy_date(next_hydro)
+    if hydro_date is None:
+        return False
+    return hydro_date < date.today()
 
 
 @bp.route('/health')
@@ -335,6 +359,7 @@ def settings():
     form.app_timezone.data = config.get_app_timezone()
     form.gear_list_type_ids.data = config.gear_list_type_ids or '11'
     form.gear_list_statuses.data = config.gear_list_statuses or 'Active'
+    form.allow_out_of_hydro_fills.data = config.get_allow_out_of_hydro_fills()
 
     selected_type_ids = set(config.get_gear_list_type_ids())
     gear_type_rows = (
@@ -595,6 +620,7 @@ def update_settings():
         )
         config.set_gear_list_type_ids(form.gear_list_type_ids.data)
         config.set_gear_list_statuses(form.gear_list_statuses.data)
+        config.allow_out_of_hydro_fills = bool(form.allow_out_of_hydro_fills.data)
         
         db.session.commit()
         
@@ -696,12 +722,17 @@ def public_fills(board_key=None):
         if fill_site_name
         else "SCBA Cylinder Fill Log"
     )
+    config = ScrapeConfig.query.first()
+    allow_out_of_hydro_fills = (
+        config.get_allow_out_of_hydro_fills() if config else False
+    )
     return render_template(
         'fills_public.html',
         cylinders_json=json.dumps(data),
         page_title=page_title,
         fill_site_name=fill_site_name,
         board_key=fill_board.key if fill_board else None,
+        allow_out_of_hydro_fills=allow_out_of_hydro_fills,
     )
 
 
@@ -746,6 +777,25 @@ def public_log_fills():
         Equipment.query.filter(Equipment.internalid.in_(internalids)).all()
     )
     by_internal = {str(e.internalid).strip(): e for e in equipment_rows if e.internalid}
+
+    config = ScrapeConfig.query.first()
+    allow_out_of_hydro = (
+        config.get_allow_out_of_hydro_fills() if config else False
+    )
+    if not allow_out_of_hydro:
+        overdue_ids = [
+            iid
+            for iid in internalids
+            if _is_hydro_overdue((by_internal.get(iid).next_hydro if by_internal.get(iid) else None))
+        ]
+        if overdue_ids:
+            return jsonify({
+                "success": False,
+                "error": (
+                    "Filling cylinders that are out of hydro is disabled. "
+                    f"Overdue: {', '.join(overdue_ids)}"
+                ),
+            }), 400
 
     created = 0
     gear_ids = []

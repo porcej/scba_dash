@@ -728,6 +728,16 @@ def public_log_fills():
         fill_site = fill_board.fill_site
         fill_site_name = fill_site.name if fill_site else None
 
+    badge_raw = str(payload.get("badge_number") or "").strip()
+    badge_digits = "".join(ch for ch in badge_raw if ch.isdigit())[:4]
+    if len(badge_digits) != 4:
+        return jsonify({
+            "success": False,
+            "error": "Badge number is required and must be exactly 4 digits",
+        }), 400
+    badge_number = badge_digits.zfill(4)
+    fill_notes = f"Filled by {badge_number}"
+
     batch_id = str(uuid.uuid4())
     now = datetime.utcnow()
 
@@ -776,7 +786,7 @@ def public_log_fills():
         else:
             try:
                 pstrax_result = perform_pstrax_batch_air_fill(
-                    unique_gear_ids, fill_site_name
+                    unique_gear_ids, fill_site_name, notes=fill_notes
                 )
             except Exception as e:
                 pstrax_result = {
@@ -790,6 +800,7 @@ def public_log_fills():
         "created": created,
         "filled_at": now.isoformat(),
         "fill_site": fill_site_name,
+        "badge_number": badge_number,
         "pstrax": pstrax_result,
     })
 

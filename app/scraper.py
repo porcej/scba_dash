@@ -274,7 +274,7 @@ class PstraxScraper:
         
         return response
 
-    def post_batch_air_fill(self, gear_ids, fill_site_name, base_url='https://app1.pstrax.com'):
+    def post_batch_air_fill(self, gear_ids, fill_site_name, base_url='https://app1.pstrax.com', notes=None):
         """
         Log a batch cylinder air fill in PSTrax.
 
@@ -293,6 +293,7 @@ class PstraxScraper:
         fill_site_name = (fill_site_name or '').strip()
         if not fill_site_name:
             return {'success': False, 'error': 'Fill site name is required'}
+        notes_value = (notes or '').strip()
 
         headers = {
             'Referer': base + '/',
@@ -449,7 +450,10 @@ class PstraxScraper:
                     selected = el.find('option')
                 append_field(name, selected.get('value') if selected else '')
             elif tag == 'textarea':
-                append_field(name, el.get_text() or el.get('value') or '')
+                if name == 'desc' and notes_value:
+                    append_field(name, notes_value)
+                else:
+                    append_field(name, el.get_text() or el.get('value') or '')
 
         # Ensure required fields exist even if missing from parsed markup.
         if 'backdate' not in seen_names:
@@ -458,6 +462,10 @@ class PstraxScraper:
             append_field('Comments_464998_0', matched_site)
         if 'btnsubmit' not in seen_names:
             append_field('btnsubmit', 'LOG EVENT')
+        if notes_value:
+            # Force desc notes even if already present with empty value.
+            payload = [(n, v) for (n, v) in payload if n != 'desc']
+            append_field('desc', notes_value)
 
         csrf_token = None
         csrf_input = form.find('input', {'name': '_token'}) or form.find('input', {'id': 'csrf_token'})
@@ -889,7 +897,7 @@ def perform_equipment_scrape():
         emit_equipment_updated()
 
 
-def perform_pstrax_batch_air_fill(gear_ids, fill_site_name):
+def perform_pstrax_batch_air_fill(gear_ids, fill_site_name, notes=None):
     """Login to PSTrax and submit a batch air-fill log for the given gear IDs."""
     config = ScrapeConfig.query.first()
     if not config or not config.pstrax_username or not config.pstrax_password_encrypted:
@@ -915,6 +923,7 @@ def perform_pstrax_batch_air_fill(gear_ids, fill_site_name):
         gear_ids=gear_ids,
         fill_site_name=fill_site_name,
         base_url=base_url,
+        notes=notes,
     )
     if result.get('success'):
         print(

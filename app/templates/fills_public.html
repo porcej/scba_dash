@@ -89,6 +89,44 @@
         .fills-modal-warning .fills-modal-inner {
             background: rgba(255,255,255,0.28);
         }
+        .fills-modal-neutral {
+            background: rgba(33, 37, 41, 0.55);
+            color: #212529;
+        }
+        .fills-modal-neutral .fills-modal-inner {
+            background: #f8f9fa;
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            box-shadow: 0 22px 60px rgba(0, 0, 0, 0.28);
+        }
+        .fills-modal-neutral h1,
+        .fills-modal-neutral p,
+        .fills-modal-neutral .form-label,
+        .fills-modal-neutral .help {
+            color: #212529;
+        }
+        .fills-modal-neutral .kbd-input {
+            background: #fff;
+            color: #212529;
+        }
+        [data-theme="dark"] .fills-modal-neutral {
+            background: rgba(0, 0, 0, 0.62);
+            color: #e9ecef;
+        }
+        [data-theme="dark"] .fills-modal-neutral .fills-modal-inner {
+            background: #2b3035;
+            border-color: rgba(255, 255, 255, 0.08);
+        }
+        [data-theme="dark"] .fills-modal-neutral h1,
+        [data-theme="dark"] .fills-modal-neutral p,
+        [data-theme="dark"] .fills-modal-neutral .form-label,
+        [data-theme="dark"] .fills-modal-neutral .help {
+            color: #e9ecef;
+        }
+        [data-theme="dark"] .fills-modal-neutral .kbd-input {
+            background: #212529;
+            color: #e9ecef;
+            border-color: rgba(255, 255, 255, 0.18);
+        }
     </style>
 </head>
 <body>
@@ -207,6 +245,24 @@
             <p id="warningMsg">Cylinder expires soon.</p>
             <div class="d-grid">
                 <button type="button" class="btn btn-dark btn-ack" id="warningOk">Okay</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="fills-modal fills-modal-neutral" id="badgeModal" role="dialog" aria-modal="true" aria-labelledby="badgeTitle">
+        <div class="fills-modal-inner">
+            <h1 id="badgeTitle"><i class="bi bi-person-badge"></i> Badge Number</h1>
+            <p>Enter your 4-digit badge number to log this fill.</p>
+            <div class="mb-3">
+                <label class="form-label" for="badgeInput"><strong>Badge #</strong></label>
+                <input id="badgeInput" class="form-control kbd-input" type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="0000" autocomplete="off" enterkeyhint="done">
+                <div id="badgeError" class="text-danger mt-2" style="display:none;"></div>
+            </div>
+            <div class="d-grid gap-2">
+                <button type="button" class="btn btn-primary btn-ack" id="badgeConfirm">
+                    <i class="bi bi-check2-circle"></i> Confirm &amp; Log Fills
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-ack" id="badgeCancel">Cancel</button>
             </div>
         </div>
     </div>
@@ -455,9 +511,53 @@
             inp.focus();
         }
 
-        async function logFills() {
+        function normalizeBadgeNumber(raw) {
+            const digits = String(raw || '').replace(/\D/g, '').slice(0, 4);
+            if (!digits) return '';
+            return digits.padStart(4, '0');
+        }
+
+        function showBadgeModal() {
+            const modal = document.getElementById('badgeModal');
+            const inp = document.getElementById('badgeInput');
+            const err = document.getElementById('badgeError');
+            if (!modal || !inp) return;
+            if (err) {
+                err.style.display = 'none';
+                err.textContent = '';
+            }
+            inp.value = '';
+            modal.classList.add('show');
+            setTimeout(() => inp.focus(), 50);
+        }
+
+        function hideBadgeModal() {
+            const modal = document.getElementById('badgeModal');
+            if (!modal) return;
+            modal.classList.remove('show');
+            const btn = document.getElementById('btnLog');
+            if (btn) btn.disabled = selected.size === 0;
+            const cyl = document.getElementById('cylInput');
+            if (cyl) cyl.focus();
+        }
+
+        function promptForBadgeThenLog() {
             const ids = Array.from(selected.keys());
             if (ids.length === 0) return;
+            const btn = document.getElementById('btnLog');
+            if (btn) btn.disabled = true;
+            showBadgeModal();
+        }
+
+        async function logFills(badgeNumber) {
+            const ids = Array.from(selected.keys());
+            if (ids.length === 0) return;
+
+            const badge = normalizeBadgeNumber(badgeNumber);
+            if (badge.length !== 4) {
+                flash('Enter a valid 4 digit badge number', 'warning');
+                return;
+            }
 
             const btn = document.getElementById('btnLog');
             btn.disabled = true;
@@ -471,7 +571,8 @@
                     body: JSON.stringify({
                         internalids: ids,
                         board_key: boardKey || null,
-                        fill_site: fillSiteName || null
+                        fill_site: fillSiteName || null,
+                        badge_number: badge
                     })
                 });
                 const data = await resp.json();
@@ -503,6 +604,23 @@
                 flash('Network error logging fills', 'danger');
                 btn.disabled = false;
             }
+        }
+
+        function confirmBadgeAndLog() {
+            const inp = document.getElementById('badgeInput');
+            const err = document.getElementById('badgeError');
+            const digits = String((inp && inp.value) || '').replace(/\D/g, '').slice(0, 4);
+            if (digits.length !== 4) {
+                if (err) {
+                    err.textContent = 'Badge number must be exactly 4 digits.';
+                    err.style.display = 'block';
+                }
+                if (inp) inp.focus();
+                return;
+            }
+            const badge = normalizeBadgeNumber(digits);
+            hideBadgeModal();
+            logFills(badge);
         }
 
         function syncThemeButton() {
@@ -554,12 +672,41 @@
                     addFromInput();
                 }
             });
-            document.getElementById('btnLog').addEventListener('click', logFills);
+            document.getElementById('btnLog').addEventListener('click', promptForBadgeThenLog);
             document.getElementById('btnClear').addEventListener('click', () => {
                 selected.clear();
                 syncTableChecks();
                 renderSelected();
             });
+
+            const badgeInput = document.getElementById('badgeInput');
+            if (badgeInput) {
+                badgeInput.addEventListener('input', () => {
+                    badgeInput.value = (badgeInput.value || '').replace(/\D/g, '').slice(0, 4);
+                    const err = document.getElementById('badgeError');
+                    if (err) {
+                        err.style.display = 'none';
+                        err.textContent = '';
+                    }
+                });
+                badgeInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        confirmBadgeAndLog();
+                    } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        hideBadgeModal();
+                    }
+                });
+            }
+            const badgeConfirm = document.getElementById('badgeConfirm');
+            if (badgeConfirm) {
+                badgeConfirm.addEventListener('click', confirmBadgeAndLog);
+            }
+            const badgeCancel = document.getElementById('badgeCancel');
+            if (badgeCancel) {
+                badgeCancel.addEventListener('click', hideBadgeModal);
+            }
         });
     </script>
 </body>
